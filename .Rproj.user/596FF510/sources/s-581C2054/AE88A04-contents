@@ -1,0 +1,89 @@
+---
+knit: "bookdown::render_book"
+site: bookdown::bookdown_site
+output: 
+   thesisdown::thesis_pdf
+#  thesisdown::thesis_word
+#  thesisdown::thesis_gitbook
+#  thesisdown::thesis_epub
+
+
+author: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/author.txt"), collapse = '\n  ')`
+authorshort: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/authorshort.txt"), collapse = '\n  ')`
+advisor: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/advisor.txt"), collapse = '\n  ')`
+committee: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/committee.txt"), collapse = '\n  ')`
+department: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/department.txt"), collapse = '\n  ')`
+institution: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/institution.txt"), collapse = '\n  ')`
+title: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/title.txt"), collapse = '\n  ')`
+halftitle: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/halftitle.txt"), collapse = '\n  ')`
+degree: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/degree.txt"), collapse = '\n  ')`
+degreeshort: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/degreeshort.txt"), collapse = '\n  ')`
+education: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/education.txt"), collapse = '\n  ')`
+year: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/year.txt"), collapse = '\n  ')`
+month: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/month.txt"), collapse = '\n  ')`
+city: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/city.txt"), collapse = '\n  ')`
+province: |
+  `r if(knitr:::is_latex_output()) paste(readLines("prelim/province.txt"), collapse = '\n  ')`
+
+
+
+
+
+#layabstract: |
+ # `r if(knitr:::is_latex_output()) paste(readLines("chapter/00-layabstract.Rmd"), collapse = '\n  ')`
+abstract: |
+  `r if(knitr:::is_latex_output()) paste(readLines("chapter/00-abstract.Rmd"), collapse = '\n  ')`
+acknowledgements: |
+  `r if(knitr:::is_latex_output()) paste(readLines("chapter/00-acknowledgements.Rmd"), collapse = '\n  ')`
+declaration: |
+  `r if(knitr:::is_latex_output()) paste(readLines("chapter/00-declaration.Rmd"), collapse = '\n  ')`
+  
+# Bibliography  
+#bibliography: [bib/thesis.bib, bib/bibCANFDI.bib, bib/LGTbib.bib, bib/SDTbib.bib]
+bibliography: [bib/thesis-chapter-1-bib.bib, bib/thesis-chapter-2-bib.bib, bib/thesis-chapter-3-bib.bib, bib/thesis-chapter-4-bib.bib, bib/bibCANFDI.bib, bib/LGTbib.bib, bib/SDTbib.bib]
+# bibliography: [bib/thesis.bib,bib/otherbib.bib] an example of using multiple .bib files
+csl: csl/apa.csl
+lot: true
+lof: true
+#space_between_paragraphs: true
+---
+
+<!--
+Above is the YAML (YAML Ain't Markup Language) header that includes a lot of metadata used to produce the document.  Be careful with spacing in this header!
+-->
+
+<!--
+If you receive a duplicate label error after knitting, make sure to delete the index.Rmd file and then knit again.
+-->
+
+```{r include_packages, include = FALSE, eval = FALSE, echo = FALSE}
+# This chunk ensures that the thesisdown package is
+# installed and loaded. This thesisdown package includes
+# the template files for the thesis.
+if(!require(devtools))
+  install.packages("devtools", repos = "http://cran.rstudio.com")
+if(!require(thesisdown))
+  devtools::install_github("ismayc/thesisdown")
+library(thesisdown)
+```
+
+
+
+
+
+
+

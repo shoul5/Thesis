@@ -1,0 +1,686 @@
+# Protectionism when the going gets tough: Trade agreements and sovereign default
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+library(extrafont)
+#loadfonts(device="win")
+library(ggplot2)
+library(dplyr)
+library(R.matlab)
+library(data.table)
+library(tidyr)
+require(plyr)
+library(fields)
+library(stargazer)
+library(xlsx)
+library(gridExtra)
+library(png)
+library(grid)
+datadir<-"data"
+figure<-"figure"
+```
+
+---
+ nocite: |
+  @WB3,  @TRAINS
+...
+
+\vspace{2cm}
+
+## Introduction
+
+Signing multilateral and bilateral trade agreements can represent many benefits for developing countries. This paper looks at the potentially negative impact of having tariffs tied down by such tariff treaties in the context of a sovereign default episode.  
+
+In general, fiscal policy in developed countries is different than in emerging economies. Whereas most developed economies increase spending and lower taxes when faced with a negative shock, developing countries lower spending and raise taxes as is shown in @NBERw7499. 
+
+The procyclicality of fiscal policy with the business cycle is represented in this model with the only tax instrument being the import tariff. For countries with less extensive institutions, one of the primary channels to raise revenues is through tariffs on imports. Countries with large informal sectors will find that there is likely a binding limit in their ability to collect income or capital tax from business and individuals and hence may find it attractive to raise government revenues through taxes on goods brought across the border. 
+
+Table \ref{table1} shows the average revenue raised from customs and other import duties, as a \% of tax revenue, for a sample small countries fitting this definition and having enough years of data.^[Data provided by World Development Indicators, World Bank (1990-2016)] Some of these countries such as Bahrain and Madagascar collected annually almost more than half of their government revenues from import tariffs.
+
+```{r}
+tariffrev <- read.csv(file.path(datadir,"WBTaxRev.csv"), header = TRUE, sep=",", stringsAsFactors = FALSE)
+tariffrev <- tariffrev[-c(39:43),]
+tariffrev <- tariffrev[-c(32,33)]
+colnames(tariffrev)[5:ncol(tariffrev)]<-1990:2016
+tariffrev[tariffrev==".."]<-NA
+
+Revpanel <- tariffrev %>%
+ gather(Year, Revenues, 5:31) %>%
+  arrange(Country.Name,Year) %>%
+  mutate(Rev = as.numeric(Revenues)) %>%
+  mutate(Country.Name = as.factor(Country.Name)) %>%
+  group_by(Country.Name) %>%
+  filter(all(Rev>=20,na.rm = TRUE)) %>%
+  summarise(MeanTRev = mean(Rev, na.rm=TRUE)) 
+
+#colnames(Revpanel)[1:2]<-c("Country","Mean annual revenue from import tariffs (% of total revenue)")
+```
+
+
+\small{}
+```{r,eval=FALSE}
+knitr::kable(Revpanel)
+```
+---------------------------------------------------------------------------------
+ Country            Mean revenue from import tariffs (% of total revenue)       
+------------------ --------------------------------------------------------------
+Afghanistan         40.38   
+
+Bahrain             57.29  
+
+Benin               25.34  
+
+Botswana            37.67  
+
+Congo, Dem. Rep.    32.97  
+
+Ghana               22.83  
+
+Liberia             41.89  
+
+Madagascar          48.76  
+
+Namibia             35.34  
+
+Togo                22.61  
+---------------------------------------------------------------------------------
+
+
+Table: Importance of Import Tariffs in Revenues \label{table1}
+
+\normalsize{}
+
+The framework presented in this paper works from a basic sovereign default model, @EG, and adds a production function with an imported input from abroad. A tariff rate $\tau$ is imposed on imports of this intermediate good. This tariff rate is chosen by the sovereign. If the sovereign raises tariffs, output in the home country falls from an increase in tariffs. However, raising the tariff rate might allow it to repay its debt and continue borrowing the next period. When the country defaults, it faces an asymmetric cost to TFP in the production function, similarly to the output loss presented in @A, as well as temporary exclusion from international borrowing markets.
+
+This paper makes the following contributions. By adding the use of the imported good in the production function we can endogenize the following tradeoff. Increasing the tariff raises the government's ability to borrow on international financial markets. As the import tariff increases, the sovereign needs to pay more for its input, making output fall. At some point the consumption loss from the fall in output will outweigh the consumption loss from the cost of default and the sovereign will choose to default. In this model, default will occur at higher levels of debt to GDP than in a sovereign default models where tariffs are set to zero. Where in classical trade theory, the optimal tariff for a small open economy is zero, this model delivers positive and non-zero optimal tariffs when the risk of default rises. It illustrates the importance of flexible tariffs for small countries with large informal sectors that rely heavily on import tariffs as a source of government revenue.
+
+
+The remainder of the paper is as follows. Section 2 relates this paper to the sovereign default literature. Section 3 examines the data. Section 4 describes the structural model. Section 5 discusses numerical simulations of this model. Section 6 looks at some sensitivity analysis and section 7 concludes.
+
+
+
+## Related Literature
+
+The sovereign default literature studies a wide variety of cases and considerations. As its pillar, the @EG model with non-state-contingent contracts, which was further developed by the @AG and @A, generates endogenous default decisions for poor endowment realizations. Also at its core, the @CK and @CK2 models, followed by @JCK, deliver multiple equilibria with self-fulfilling defaults. 
+
+
+This paper is related to two main branches of this sovereign default literature; fiscal policy and trade. Many papers look at various aspects of fiscal policy. @CSS develop a procyclical model for fiscal policy and sovereign default. As well, @AA consider labour and capital taxes, finding an optimal long-run labour tax of zero in a Ramsey equilibrium. @JKA examine the role of sovereign default and taxation in increasing income inequality within a country. In the case of the Eurozone, @GPT highlight the consequence of elevated debt levels, rather than fiscal discipline, in leading to default.
+
+Trade costs resulting from sovereign default were empirically examined by @R who finds a large cost, namely that international trade falls by $8\%$ for many years following default. However, @ML find that after default, trade only fell for non-creditor countries not with creditor countries. @PW show most of the trade costs come through a deterioration in terms-of-trade for the defaulting country. This paper abstracts from change in terms-of-trade by using a small open economy with a fixed price for the foreign good. This is more representative of the small country with informal institutions that are modeled in this paper. This paper does not impose a trade cost of default, only the usual asymmetric output costs and international borrowing exclusion. 
+
+
+
+
+## Empirical Analysis
+```{r loaddata}
+
+DatF<-read.csv(file.path(datadir,"DF.csv"),header=TRUE,sep=",",stringsAsFactors=FALSE)
+```
+
+This Section examines how tariffs change empirically around a sovereign default episode. There are some complications related to looking at exact tariff rate movements. Tariffs are applied differently to different countries depending on whether they are both in the WTO or are part of a bilateral or multilateral regional trade agreement. Adding to the complexity, sometimes tariff lines are re-organized to tax more heavily goods that are imported more. This compositional effect will raise revenues overall but may not show up in the aggregated tariff rates. Further complicating things, WTO developing country members typically get unilateral preferential treatment with developed countries, through programs including the Generalized System of Preferences or Everything But Arms. As well, the types of countries that are most applicable to this problem, those with less formal institutions, are also less likely to collect reliable data, if at all. For this reason, we start by looking at mean reported tariff revenues on imports, then attempt to look at the empirical distribution of tariff rates.
+
+Figure \ref{Trev} shows tax revenues from imports as a percentage of total revenues using World Development Indicators data for five countries who went through recent defaults: Argentina, Dominican Republic, Paraguay, Uruguay with defaults in 2001, 2005, 2003, 2003, respectively, and two for Venezuela (1995 and 2004). The horizontal axis shows years around the default, where $T=0$ indicates the year of default.
+
+
+```{r, warning=FALSE,message=FALSE, out.width='70%', fig.align='center'}
+#Add other countries?
+
+Taxplot <- ggplot(DatF,aes(x=Time,y=TaxRev))+geom_smooth(stat ="smooth")+xlim(-4,4)+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+ylab("Import Tariff Revenues (as % of total revenues)")+xlab("Years Before/After Default")+geom_vline(xintercept = 0,colour = 'black')#, panel.grid.major = element_blank()
+```
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/Taxplot.png')
+Taxplot
+dev.off()
+```
+
+
+\rtofigure{figure/Taxplot}{Tax Revenue from Import Tariffs}{}{0.8}{Trev}
+
+
+In the years prior to default, a higher percentage of government revenue comes from import tariffs. Once a state of default is reached, there is no longer a need for higher government revenue to continue borrowing, and any remaining tariffs are only hurting output. Hence, tariff revenues would be expected to fall. 
+
+Figures \ref{Applied} and \ref{Bound} show the distribution of the Most Favoured Nation (MFN) Applied rate and Bound rate using UNCTAD-TRAINS (Trade Analysis and Information System) data. MFN Applied rates are the applied tariff rates for commodities traded between members of the WTO, unless the trading partners are part of a preferential trade agreement. MFN Bound rates are the maximum MFN tariff level, for a given commodity line, for countries within the WTO. It is not necessarily the rate that is actually applied. 
+
+
+```{r, out.width='70%', fig.align='center'}
+MFNdata<-read.csv(file.path(datadir,"MFNApplied.csv"), header = TRUE,sep = ",",stringsAsFactors = FALSE)
+BNDdata<-read.csv(file.path(datadir,"MFNBound.csv"), header = TRUE,sep = ",",stringsAsFactors = FALSE)
+
+#MFNdata$Status<-transmute(MFNdata, Status = ifelse(WTO==0 & Default==0,0,ifelse(WTO==1 & Default==0,1,ifelse(WTO==0 & Default==1,2,3))))
+MFNdata$Default<-as.factor(MFNdata$Default)
+BNDdata$Default<-as.factor(BNDdata$Default)
+
+
+Tariffplot <- ggplot()+geom_boxplot(data=MFNdata,aes(x=Default,y=MFN,group=Default))+theme_classic()+theme(text=element_text(size=12,  family="Times"))+ stat_summary(fun.y = mean, colour = "red", size = 2, geom = "point")+scale_x_discrete(labels=c('0'='No Default','1'='Default'))+xlab(NULL)+ylab(NULL)+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))
+
+Tariffplot2 <- ggplot()+geom_boxplot(data=BNDdata,aes(x=Default,y=BND,group=Default))+theme_classic()+theme(text=element_text(size=12,  family="Times"))+ stat_summary(fun.y = "mean", colour = "red", size = 2, geom = "point")+xlab(NULL)+scale_x_discrete(labels=c('0'='No Default','1'='Default'))+ylab(NULL)+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))
+
+# Taking the difference between BND and MFN 
+# MFNdf<-right_join(MFNdata,BNDdata,by=c("Tariff.Year","Reporter.Name","Default"))
+# MFNdf<-select(MFNdf,Reporter.Name,Tariff.Year,BND,MFN,Default)
+# MFNdf$TariffDifference<-MFNdf$BND-MFNdf$MFN
+# 
+# ggplot(data=MFNdf,aes(x=Default,y=TariffDifference,group=Default))+geom_boxplot()
+```
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/Tariffplot.png')
+Tariffplot
+dev.off()
+```
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/Tariffplot2.png')
+Tariffplot2
+dev.off()
+```
+
+
+\rtofigure{figure/Tariffplot}{MFN Applied Tariff Rate}{}{0.8}{Applied}
+
+\rtofigure{figure/Tariffplot2}{MFN Bound Tariff Rate}{}{0.8}{Bound}
+
+We can see that both the MFN applied tariff and MFN bound tariff rates have a higher 3rd quintile when the country is default rather than not in default. The bound rate's distribution in default is not well defined since there are not many countries that have recorded bound rates when in default and they usually do not change over the years. These tariff data are available for more countries than in Figure \ref{Trev}. The list of countries and years of default for these two figures are shown in the Appendix. A dummy variable denotes whether or not the country was in default that year and the distributions for annual observations of tariff rates in default versus distribution of annual tariff rates when not in default are shown in Figures \ref{Applied} and \ref{Bound}. For reasons mentioned above, this way of looking at tariffs may not yield the right amount of actual tariff revenues. Hence, given the limitations of the data, empirical analysis can at best provide an incomplete guide as to the relationship between tariffs and sovereign default.
+
+
+
+
+## Model
+The model is based on the @EG model with the addition of a production function that pays a tariff $\tau$ on imports of its input from abroad $f$. There are two types of agents: international bankers and a benevolent sovereign.
+
+
+### International Banker
+
+There is a continuum with measure one of identical risk-neutral international bankers who maximize their expected utility: \begin{equation}
+\underset{d'}{\max} \hspace{2mm}\Psi =\left(\frac{1-\delta}{1 + r*}\right) d-q(d',z)d'
+\end{equation}
+
+The bankers lend next period debt, $d'$, to the sovereign at price $q(d',z)$ and receive $d$ this period. The debt payment received this period is determined by $\delta$, the probability the sovereign defaults, and $r*$ is the risk-free interest rate. 
+
+The bankers first order condition is:
+
+\begin{equation}
+q(d',z)=\frac{1-\delta(d',z)}{1 + r*}
+\end{equation}
+
+The price of next period's debt is determined by how likely the country is to default and the discount rate. If there is zero risk of default, $\delta$ is $0$, $q$ is $1$ and the sovereign will receive the full amount $d'$. As the probability of default increases and delta gets closer to $1$, the more $q$ approaches $0$ and the sovereign receives $d'$ that approaches $0$. The probability of sovereign default is a function of how much next period debt is borrowed and the stochastic productivity $z$ this period.
+
+### Sovereign
+
+A benevolent government maximizes the households' lifetime utility $E\sum_{t=0}^{\infty}\beta^t u(c_t,g_t)$ according to the value function:
+\begin{equation}
+V(z,d)=\underset{c,g,d'}{\max}\{u(c,g)+\beta E V(z',d')\}
+\end{equation}
+
+The utility function follows a log separable utility functional form  with consumption tax rate $\phi$ which is borrowed from @CK
+
+$$u(c) = \log(c) + \gamma \log(g)$$
+
+where
+
+\begin{align}
+c = & (1-\phi)[z f^{\alpha} - (1+\tau)p_ff]\\
+g = & \tau p_f f - d + qd' +\phi c
+\end{align}
+
+Each period, a sovereign in good standing imports a foreign input, $f$ to produce output, receives new debt $d'$ at price $q$ and collects revenues from the import tariff, $\tau$ and the consumption tax, $\phi$. This amount is allocated towards private consumption, $c$, government spending, $g$ and to repay $d$, if it chooses not to default. The price of the foreign good $p_f$ is normalized to one.
+
+
+The productivity in the production function $z$ faces the AR(1) process:
+
+$\ln z_t=\rho \ln z_{t-1} + \epsilon_t$
+
+### Timing 
+The sequence of events within a period is as follows:
+
+1. The sovereign chooses $f$ given the realization of the productivity process for $z$ and the previous period default choice. 
+2. Given $f$, the government decides whether to repay or default and tariff rate $\tau$. If it chooses to repay, then it chooses $d'$, taking the price schedule $q(d',z)$ and the budget constraints as given.
+3. The international lender chooses to lend $d'$ at price $q(d',z)$.
+4. Private and government consumption $c$ and $g$ take place.
+
+
+### Recursive Equilibrium
+
+\textbf{Value of continuation:}
+
+Every period, a government in good standing faces the choice whether to default or continue repaying its debt. It will continue repaying if the value of defaulting, $V^b(z^b)$ is less than the value of repaying, $V^g(z,d')$.
+
+\begin{equation}
+V^0(z,d)=\max\{V^b(z^b),V^g(z,d')\}
+\end{equation}
+
+
+\textbf{Value of good state:}
+
+A sovereign in a good state maximizes consumption and next period debt according to:
+\begin{equation}
+V^g(z,d)=\underset{\tau,d'}{\max}\{u(c,g)+\beta EV^0(z',d')\}
+\end{equation}
+
+\textbf{Value of bad state}
+
+When the sovereign defaults, he faces the following value function:
+\begin{equation}
+V^b(z)=u(c^b,g^b)+\beta E[\theta V(0,z')+ (1-\theta) V(z')]
+\end{equation}
+
+The cost of default is a function of the stochastic productivity $z$. This cost of default is asymmetric, similarly to how output is altered under default in @A and @CE. The financial autarky productivity level is:
+\[
+z^b = z - \left\{ 
+\begin{array}{ll}
+    0, \text{ if } z\leq-\frac{a_o}{a_1}\\
+    a_oz + a_1z^2, \text{ if } z> -\frac{a_o}{a_1}\\
+    \end{array} \
+    \right.
+\]
+
+This specification allows for increasingly higher loss of productivity at greater levels of productivity, so that a country does not want to default in good times. The value of parameters $a_o$, $a_1$ are discussed in the section below. The country consumes $c^b=(1-\phi)[z^bf^{\alpha}+(1+\tau)p_ff]$ under default where the lower productivity will impact the output of the final good. There is no imposed cost of default on imports, $f$.
+
+Every period after a default, there is a probability $\theta$ that the sovereign will re-enter international financial markets and restart at a debt level of zero.
+
+
+## Computation
+
+```{r}
+
+
+#Data$Time<-as.factor(Data$Time)
+MLdata <- readMat(file.path(datadir,'CKTariff.mat'))
+MLdataT0 <- readMat(file.path(datadir,'CKTariff0.mat'))
+
+```
+
+First, the model is simulated according to the values in Table \ref{table2}. The values for $a_0$, $a_1$ and $\theta$ were borrowed from @CE. The AR(1) process for productivity shocks is modeled as in @OEM.
+
+\vspace{0.4cm}
+
+<!-- \begin{center} -->
+<!-- \textbf{Table 2} -->
+<!-- \end{center} -->
+
+
+<!-- |  Parameter | Description | Value | -->
+<!-- |------------|-------------|-------| -->
+<!-- | $r$ | Risk free Interest Rate | $0.01$ | -->
+<!-- |$\beta$ | Discount Factor | $0.99$ | -->
+<!-- |$\alpha$ | Production Function Scale Factor | $0.7$ | -->
+<!-- |$\phi$ | Consumption tax | $0.3$ | -->
+<!-- |$\gamma$ | Preference for government consumption | $0.5$ | -->
+<!-- |$\theta$ | Probability of re-entry| $0.0385$ | -->
+<!-- |$a_o$ | Cost of default parameter ($a_oz + a_1z^2$) | `r MLdata$a1` | -->
+<!-- |$a_1$ | Cost of default parameter ($a_oz + a_1z^2$) | `r MLdata$a2` | -->
+<!-- |$\rho$ | Coefficient on $z_{t-1}$  in the AR(1) process |  $0.948503$ | -->
+<!-- |$\epsilon$ | Standard deviation in the AR(1) process | $0.027092$ | -->
+<!-- |$\mu$ | Intercept in the AR(1) process | $0$ | -->
+
+
+---------------------------------------------------------------------------
+Parameter   Description                                          Value
+---------- ---------------------------------------------- -----------------
+$r$         Risk free Interest Rate                               $0.01$
+
+$\beta$     Discount Factor                                       $0.99$
+
+$\alpha$    Production Function Scale Factor                      $0.7$
+
+$\phi$      Consumption tax                                       $0.3$
+
+$\gamma$    Preference for government consumption                 $0.5$
+
+$\theta$    Probability of re-entry                               $0.0385$
+
+$a_o$       Cost of default parameter ($a_oz + a_1z^2$)           `r MLdata$a1`
+
+$a_1$       Cost of default parameter ($a_oz + a_1z^2$)           `r MLdata$a2`
+
+$\rho$      Coefficient on $z_{t-1}$  in the AR(1) process        $0.948503$
+
+$\epsilon$  Standard deviation in the AR(1) process               $0.027092$
+---------------------------------------------------------------------------
+
+Table: Parameter Values \label{table2}
+
+
+
+The optimal tariff is plotted according to the different levels of debt and productivity in Figure \ref{OptT}. The dark blue area in the bottom right portion is the region the sovereign optimally defaults for high levels of debt and low levels of productivity. The import tariff rate in this region is optimally zero since this is a simulated small open economy, so it is expected that the optimal tariff would be zero if the country is in autarky (financial autarky - not trade autarky). As the level of debt increases or productivity falls, we approach the default line. Near the default line, the government seeks to raise tariffs, up to `r round(max(MLdata$opttau),3)` in order to avoid defaulting.
+
+
+```{r, message=FALSE, warning=FALSE, out.width='70%', fig.align='center'}
+
+#Plot optimal tariff
+OptTau<-matrix(t(MLdata$opttau), nrow=50)
+coln<-format(round(t(MLdata$d), 2), nsmall = 2)
+xticks<-coln[c(1,12, 25,37,50)]#50,37, 25,12,1
+rown<-format(round(t(MLdata$h), 2), nsmall = 2)
+yticks<-rown[c(1,12, 25,37,50)]
+#par(mar=c(5,5,5,7))
+
+png(filename = 'figure/OptTau.png')
+image.plot(OptTau, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks)+axis(2, at=seq(0,1,0.25), labels=yticks)+text(0.6,0.4,lab="Default Region",col="white")
+dev.off()
+# 
+# 
+```
+
+
+\rtofigure{figure/OptTau}{Optimal tariff for each level of productivity and debt}{}{0.8}{OptT}
+
+
+This model generates higher levels of debt and debt-to-GDP relative to the no-tariff benchmark. Figure \ref{MaxD} shows the optimal next period debt, $d'$ according to current debt, $d$ and productivity, $z$. The left-hand side figure (a) shows next period debt levels when the sovereign can set tariffs. In the right-hand side figure (b) where tariffs are set to zero. We see that the sovereign can choose a higher next period debt for all levels of current debt and productivity greater than zero. As well, he can avoid default for higher levels of the debt. As the default line has shifted to the right, the default region has become smaller.
+
+<!--
+\vspace{0.5cm}
+-->
+
+```{r DefaultRegion, out.width='70%', fig.align='center'}
+
+MaxDebt<-matrix(t(MLdata$dpc), nrow=50)
+coln<-format(round(t(MLdata$d), 2), nsmall = 2)
+xticks<-coln[c(1,12, 25,37,50)]#50,37, 25,12,1
+rown<-format(round(t(MLdata$h), 2), nsmall = 2)
+yticks<-rown[c(1,12, 25,37,50)]
+#par(mar=c(5,5,5,7))
+MaxDebtT0<-matrix(t(MLdataT0$dpc), nrow=50)
+coln<-format(round(t(MLdataT0$d), 2), nsmall = 2)
+xticks<-coln[c(1,12, 25,37,50)]#50,37, 25,12,1
+rown<-format(round(t(MLdataT0$h), 2), nsmall = 2)
+yticks<-rown[c(1,12, 25,37,50)]
+#par(mar=c(5,5,5,7))
+
+png(filename = 'figure/MaxDebtT.png')
+par(mfrow=c(1,2))
+image.plot(MaxDebt, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(a) with tariff choice",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+image.plot(MaxDebtT0, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(b) with zero tariff",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+graphics.off()
+```
+
+
+
+\rtofigure{figure/MaxDebtT}{Debt levels}{}{0.8}{MaxD}
+
+
+
+ 
+
+Figure \ref{MaxDGDP}, shows debt to GDP levels where the sovereign can optimally set the tariff level in (a) and where the tariff is tied down to zero (b). When the sovereign can set tariffs, higher levels of debt to GDP can be sustained without defaulting. The default line shifts to the right, allowing for higher levels of debt to output at both lower and higher levels of productivity.
+
+<!--
+\vspace{0.5cm}
+-->
+
+```{r DebtGDP, out.width='70%', fig.align='center'}
+
+DebtGDP<-matrix(t(MLdata$DebtGDP), nrow=50)
+coln<-format(round(t(MLdata$d), 2), nsmall = 2)
+xticks<-coln[c(1,12, 25,37,50)]#50,37, 25,12,1
+rown<-format(round(t(MLdata$h), 2), nsmall = 2)
+yticks<-rown[c(1,12, 25,37,50)]
+#par(mar=c(5,5,5,7))
+DebtGDPT0<-matrix(t(MLdataT0$DebtGDP), nrow=50)
+coln<-format(round(t(MLdataT0$d), 2), nsmall = 2)
+xticks<-coln[c(1,12, 25,37,50)]#50,37, 25,12,1
+rown<-format(round(t(MLdataT0$h), 2), nsmall = 2)
+yticks<-rown[c(1,12, 25,37,50)]
+#par(mar=c(5,5,5,7))
+
+
+png(filename = 'figure/DebtGDPT.png')
+par(mfrow=c(1,2))
+image.plot(DebtGDP, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(a) with tariff choice",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+
+image.plot(DebtGDPT0, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(b) with zero tariff",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+
+graphics.off()
+#grid.arrange(p1, p2, nrow = 1)
+# 
+```
+
+
+
+\rtofigure{figure/DebtGDPT}{Debt/GDP levels}{}{0.8}{MaxDGDP}
+
+
+Imports to GDP will fall in response to increased tariffs. Figure \ref{IMT} shows the different levels of imports-to-output ratios for different debt and productivity grid points. When tariffs are set to zero, Imports/GDP are constant at $0.7$. As we saw in Figure \ref{OptT}, the sovereign starts to tax imports more as it approaches the default line lowering imports more than GDP because of the decreasing returns to scale in the production function. However, if we look at Figure \ref{GDP}, we see that output is higher for all the productivity and debt levels the sovereign would have otherwise defaulted at.
+
+```{r, out.width='70%', fig.align='center'}
+
+## IM/GDP
+Imports<-matrix(t(MLdata$IMGDP), nrow=50)
+coln<-format(round(t(MLdata$d), 2), nsmall = 2)
+xticks<-coln[c(1,12, 25,37,50)]#50,37, 25,12,1
+rown<-format(round(t(MLdata$h), 2), nsmall = 2)
+yticks<-rown[c(1,12, 25,37,50)]
+#par(mar=c(5,5,5,7))
+
+
+png(filename = 'figure/Imports.png')
+image.plot(Imports, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+dev.off()
+##IM/GDP =0.7 under tariff = 0
+```
+
+
+\rtofigure{figure/Imports}{Imports/GDP with tariff choice}{}{0.8}{IMT}
+
+<!--
+\vspace{0.5cm}
+-->
+
+```{r, out.width='70%', fig.align='center', message=FALSE, warning=FALSE}
+
+utly<-matrix(t(MLdata$Y), nrow=50)
+utlyT0<-matrix(t(MLdataT0$Y), nrow=50)
+png(filename = 'figure/utly.png')
+par(mfrow=c(1,2))
+image.plot(utly, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(b) with zero tariff",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+
+image.plot(utlyT0, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(b) with zero tariff",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+
+graphics.off()
+#grid.arrange(p1, p2, nrow = 1)
+```
+
+
+\rtofigure{figure/utly}{Output levels}{}{0.8}{GDP}
+
+Finally, Figure \ref{Price} shows the price schedule for debt according to the productivity and debt states. The closer $q$ is to $1$, the lower the probability of default and the more the sovereign receives in next period debt $q(z,d') d'$. The sovereign that can increase its tariffs can pay a lower price for higher levels of debt since it directly impacts its ability to repay and lowers the probability of default $\delta$ in Equation 2.
+
+<!--
+\vspace{0.5cm}
+-->
+
+```{r, out.width='70%', fig.align='center'}
+
+## q(z,d)
+DebtPrice<-matrix(t(MLdata$q), nrow=50)
+
+DebtPrice0<-matrix(t(MLdataT0$q), nrow=50)
+
+#par(mar=c(5,5,5,7))
+
+png(filename = 'figure/DP0.png')
+par(mfrow=c(1,2))
+image.plot(DebtPrice, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(a) with tariff choice",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+
+
+#par(mar=c(5,5,5,7))
+image.plot(DebtPrice0, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(b) with zero tariff",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+
+dev.off()
+##IM/GDP =0.7 under tariff = 0
+```
+
+
+\rtofigure{figure/DP0}{q(z,d) levels}{}{0.8}{Price}
+
+
+## Sensitivity
+
+```{r}
+
+rm(MLdata)
+rm(MLdataT0)
+#Data$Time<-as.factor(Data$Time)
+# MLdataao05 <- readMat('CKTariffao05.mat')
+# MLdataao01 <- readMat('CKTariffao01.mat')
+
+
+MLdataTheta02 <- readMat(file.path(datadir,'CKTariffTheta02.mat'))
+MLdataTheta05 <- readMat(file.path(datadir,'CKTariffTheta05.mat'))
+
+```
+
+Since the cost of default plays an important role in incentivising the sovereign to raise tariff, different values are considered for the probability of re-entry, $\theta$. We also test for different values of the consumption tax, $\phi$, and the preference for government consumption, $\gamma$.
+
+For $\theta$, the probability of re-entering international financial markets after default the values tested are of `r round(MLdataTheta02$theta,1)` in (a) and `r round(MLdataTheta05$theta,1)` in (b). For a lower probability of re-entering, the average exclusion time is longer, making default more costly. We expect government to be willing to set the tariff higher to avoid default since it is so costly. This is what we can see from Figure \ref{Theta} (a).
+
+
+<!--
+\vspace{0.5cm}
+-->
+
+```{r, message=FALSE, warning=FALSE, out.width='70%', fig.align='center'}
+
+#Plot optimal tariff
+# OptTauao05<-matrix(t(MLdataao05$opttau), nrow=50)
+# OptTauao01<-matrix(t(MLdataao01$opttau), nrow=50)
+OptTauTheta02<-matrix(t(MLdataTheta02$opttau), nrow=50)
+OptTauTheta05<-matrix(t(MLdataTheta05$opttau), nrow=50)
+
+png(filename = 'figure/Theta.png')
+par(mfrow=c(1,2))
+image.plot(OptTauTheta02, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(a) Low probability of re-entry",family=("Times"))+text(0.8,0.4,lab="Default Region",col="white",family=("Times"),size=0.6)
+image.plot(OptTauTheta05, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(b) High probability of re-entry",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"),size=0.6)
+# 
+graphics.off()
+
+rm(MLdataTheta02)
+rm(MLdataTheta05)
+
+```
+
+
+
+\rtofigure{figure/Theta}{Re-entry Probability $\theta$}{}{0.8}{Theta}
+
+
+For $\phi$, the consumption tax, values of $0$ and $0.5$ are shown in Figure \ref{Ctax}. Interestingly, when the consumption tax is set to zero, the optimal tariff will be higher, but the government will not be able to sustain as much debt as we see the default region becomes larger in Figure \ref{Ctax} (a). When $\phi$ is large, the government relies less on the import tariff for revenues and can support higher levels of debt for lower levels of tariffs.
+
+<!--
+\vspace{0.5cm}
+-->
+
+```{r, message=FALSE, warning=FALSE, out.width='70%', fig.align='center'}
+
+#Plot optimal tariff
+MLdataPhi0 <- readMat(file.path(datadir,'OptTauPhi0.mat'))
+MLdataPhi05 <- readMat(file.path(datadir,'OptTauPhi05.mat'))
+
+OptTauPhi0<-matrix(t(MLdataPhi0$opttau), nrow=50)
+OptTauPhi05<-matrix(t(MLdataPhi05$opttau), nrow=50)
+
+png(filename = 'figure/Phi.png')
+par(mfrow=c(1,2))
+image.plot(OptTauPhi0, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(a) Zero Consumption Tax",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+image.plot(OptTauPhi05, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(b) High Consumption Tax",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+
+graphics.off()
+
+rm(MLdataPhi0)
+rm(MLdataPhi05)
+
+MLdataGam02 <- readMat(file.path(datadir,'OptTauGam02.mat'))
+MLdataGam08 <- readMat(file.path(datadir,'OptTauGam08.mat'))
+
+OptTauGam02<-matrix(t(MLdataGam02$opttau), nrow=50)
+OptTauGam08<-matrix(t(MLdataGam08$opttau), nrow=50)
+
+```
+
+
+\rtofigure{figure/Phi}{Consumption Tax $\phi$}{}{0.8}{Ctax}
+
+
+Figure \ref{Gamma} shows other values of $\gamma$ of `r round(MLdataGam02$gamma,1)` and `r round(MLdataGam08$gamma,1)`. $\gamma$ represents the relative preference for government consumption. As expected, a lower value of $\gamma$ yields a lower tariff for every level of debt and productivity. The default region does not shift much in either of these graphs for high levels of productivity. However, for low productivity shocks the sovereign can sustain more debt at a lower tariff rate.
+
+\vspace{0.5cm}
+
+```{r, message=FALSE, warning=FALSE, out.width='70%', fig.align='center'}
+
+#Plot optimal tariff
+
+png(filename = 'figure/Gam.png')
+par(mfrow=c(1,2))
+image.plot(OptTauGam02, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(a) Low gamma",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+image.plot(OptTauGam08, xlab="debt",ylab="z",axes=FALSE)+axis(1, at=seq(0,1,0.25), labels=xticks,family=("Times"))+axis(2, at=seq(0,1,0.25), labels=yticks,family=("Times"))+title(main="(b) High gamma",family=("Times"))+text(0.6,0.4,lab="Default Region",col="white",family=("Times"))
+
+graphics.off()
+
+rm(MLdataGam02)
+rm(MLdataGam08)
+```
+
+
+
+\rtofigure{figure/Gam}{Preference for government spending $\gamma$}{}{0.8}{Gamma}
+
+
+## Conclusion
+
+This paper evaluates import tariffs as an instrument the sovereign can use to raise revenues and avoid sovereign default. The model presented is very simple but captures the basic tradeoff a sovereign is faced with when setting an import tariff in a time of crisis. He would like to set them high enough to be able to repay its debt and hence continue borrowing, but if he sets them too high, imports will fall and the drop in output will outweigh the benefits from international borrowing. This is done by imposing the same costs of default as in the traditional sovereign default models.
+
+This model is most applicable to a small open economy with incomplete institutions. That is, a government has a binding limit on the amount of revenue it can achieve through consumption, labour or capital taxes due to the presence of a large informal sector, but is more able to tax imports entering its country. Such a country would be cautious when entering into trade agreements that limit its ability to set its tariff rate.
+
+
+
+## Appendix {-}
+
+-----------------------------------------------
+Country             Year in Default
+---------------- ------------------------------
+Algeria             1993
+
+Argentina           1993, 2001-2005
+
+Cote d’Ivoire       1993-2010
+
+Dominican Republic  2005
+
+Ecuador             1993-1995, 1999-2000, 2008
+
+Indonesia           1998-2000, 2002
+
+Kenya               1994-2002
+
+Myanmar             2002-2010
+
+Nigeria             2001, 2005
+
+Paraguay            2003-2004
+
+Russian Federation  1993-1997
+
+Uruguay             2004
+
+Venezuela           1995-1997, 2004-2005
+
+Zimbabwe            2000-2007
+-----------------------------------------------
+
+Table: Countries in Figure \ref{Applied} and \ref{Bound} \label{tableA}
+
+<!-- ```{r} -->
+<!-- #add default dates -->
+<!-- list<-unique(MFNdata$Reporter.Name) -->
+<!-- DefaultYears<-select(filter(MFNdata),Tariff.Year) -->
+<!-- knitr::kable(list) -->
+<!-- ``` -->
+
+
+
+
+

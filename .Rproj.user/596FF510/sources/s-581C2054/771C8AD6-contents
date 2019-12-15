@@ -1,0 +1,46 @@
+<!--
+This is for including Chapter 1.  Notice that it's also good practice to name your chunk.  This will help you debug potential issues as you knit.  The chunk above is called intro and the one below is called chapter1.  Feel free to change the name of the Rmd file as you wish, but don't forget to change it here from chap1.Rmd.
+-->
+
+<!--
+The {#rmd-basics} text after the chapter declaration will allow us to link throughout the document back to the beginning of Chapter 1.  These labels will automatically be generated (if not specified) by changing the spaces to hyphens and capital letters to lowercase.  Look for the reference to this label at the beginning of Chapter 2.
+-->
+```{r load_pkgs, message=FALSE,echo=FALSE,eval=FALSE, warning=FALSE}
+# List of packages required for this analysis
+pkg <- c("dplyr", "ggplot2", "knitr", "bookdown", "devtools")
+# Check if packages are not installed and assign the
+# names of the packages not installed to the variable new.pkg
+new.pkg <- pkg[!(pkg %in% installed.packages())]
+# If there are any packages in the list that aren't installed,
+# install them
+if (length(new.pkg))
+  install.packages(new.pkg, repos = "http://cran.rstudio.com")
+# Load packages (thesisdown will load all of the packages as well)
+library(thesisdown)
+
+#knitr::opts_chunk$set(echo = FALSE, fig.show = 'asis', size='scriptsize', warning = FALSE, results='hide', comment = FALSE, message = FALSE)
+```
+
+---
+ nocite: |
+  @WTO,  @WTO2, @WB3,  @TRAINS, @GAC, @CANSIM, @COMTRADE, @WB, @COMTRADE4,  @OECD4
+...
+
+# Introduction
+
+The international trade and finance literature has long been concerned with how international agreements structure our global framework for doing business. Since there is no globally recognized and sanctioned judicial court of law, these international agreements have played a huge part in shaping how countries interact with each other. They help determine guidelines for foreign investment, international borrowing and international trade among many things.
+
+Some agreements are more multilateral in nature and are overseen by one single organization, such as the WTO which includes more than 164 members countries. However, such multilateral structures have run into complications in recent years with countries such as the United States threatening to exit it. Although the WTO concluded eight successful rounds of negotiations to multilaterally lower tariffs on a variety of goods since 1947, back when it was known at the GATT, its most recent round of negotiations, the Doha round, has proved problematic and has been under negotiation since 2001. For this reason, some countries have chosen to secure tariff guarantees bilaterally by signing regional trade agreements amongst themselves. There are currently 287 regional trade agreements in force around the world, between country pairs or between group of countries pairs, (WTO Statistics, 2018a) and 32 bi- and multi-lateral preferential trade agreements (WTO Statistics, 2018b). 
+
+There also exist many other international agreements, not just those related to trade. Other agreements such as tax agreements or investment agreements also exist in isolation or in combinations with trade agreements. Most tax agreements between countries are based on the Model Tax Convention outlined by the @OECDT. International investment agreements will allow for the flow of investment between countries and stipulate mechanisms for dispute resolutions through international courts such as the International Centre for Settlement of Investment Disputes (ICSID) of the World Bank.
+
+This thesis explores three vastly different aspects related to these international agreements. First, it studies Canadian firms' investment behaviour following the signing of such an agreement. By applying empirical methods to comprehensive firm level data, the second chapter examines a particular investment agreement signed between Canada and Peru and the resulting investment behaviour of firms. Then, in the third chapter, the question shifts to examining the impact of constraining tariffs as a result of these agreements in a time of sovereign debt crisis. Finally, the fourth chapter utilises the fact that a large portion of a country's domestic consumption is now done through international trade. The existence of large amounts of trade between countries and the data that tracks it, are used to examine consumption patterns using imports of luxury goods as a proxy for changes in consumption inequality. 
+
+
+The methodologies for the second and fourth chapters are similar in nature. They use an empirical specification to test for observable changes in the data. The novelty of the second chapter lies in the data it uses. Three administrative firm-level microdata sets are merged in order to get a very clear picture of firm behaviour. Although the third chapter contains some empirical analysis, the main exercise employs a fundamentally different approach. It utilises a structural model which is then simulated via dynamic optimization in order to examine a theoretical situation that cannot readily be observed in the data. The following details the contributions of each chapter.
+
+Chapter 2 captures how firms change their production structures abroad around investment agreements by using confidential Statistics Canada firm-level tax filing microdata merged with raw firm-level import microdata. These data are available only from 2002 to 2012. Due to the small number of agreements Canada signed during this time period, the chapter focuses on the Canada-Peru Foreign Investment Protection Agreement (FIPA) enactment in 2007. In the aggregate data there is a three-fold increase in Foreign Direct Investment (FDI) by Canadian firms to Peru and a change in the composition of Canadian firm imports from Peru from raw unprocessed ore to manufactured metals, seemingly indicating that Canadian firms increased offshoring by moving the manufacturing of this raw material to take place in Peru instead of Canada, or by expanding production to include new manufacturing plants in Peru. However, the microdata show that neither of these outcomes have occured. Firms conducting FDI into Peru did so in the mining industry as opposed to manufacturing. These same firms also did not have large increases in imports of the manufacturing good from Peru. Moreover, firms that increased their Peru investment did not reduce their Canadian employment. Hence, these findings in the microdata show that the large increase in investment to Peru was not associated with offshoring developments of manufacturing in Peru.
+
+Chapter 3 examines the use import tariffs as an instrument for countries to avoid a sovereign default. When a country is facing sovereign default risk, increasing tariff rates leads to a tradeoff between raising sufficient revenues to be able to borrow for the next period while trying to mitigate the cost on output resulting from taxing imports at a higher rate. This tradeoff is examined by using the model of sovereign default developed by @EG and adding an imported intermediate good to which a tariff can be applied. The result is that for countries who rely heavily on import tariffs, such as countries with weaker institutions and less capacity to reliably collect income or capital tax, there is a cost to having tariffs bounded by trade agreements. A sovereign that can set its tariff will be able to sustain higher levels of debt at a lower price yielding higher levels of output in times when the sovereign would have defaulted if it could not set its tariff rate.
+
+In Chapter 4 results from @APS are tested. They find a post-1980 surge in taxfiler top income shares in English speaking countries (surge countries) but not in continental European countries and Japan (no-surge countries). It is found puzzling that Comtrade import-to-GDP ratios and import-to-total-import ratios for apparent luxuries pearls, precious stones, diamonds, works of art, jewellery, furs and coins do not increase post-1980 in surge countries relative to no-surge countries. Explanations could include issues with the taxfiler or import data or that top income individuals do not have a particularly high marginal to propensity to consume these luxury goods, at least within their own country. Overall, this is a fragment of evidence that there may not have been a large post-1980 increase in top-end domestic consumption inequality in surge countries compared to no-surge countries.

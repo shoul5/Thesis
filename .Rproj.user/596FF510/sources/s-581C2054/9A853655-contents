@@ -1,0 +1,4 @@
+book_filename: "Thesis"
+chapter_name: "Chapter "
+rmd_files: ["index.Rmd", "Chapter/01-chap1.Rmd", "Chapter/03-chap3.Rmd", "Chapter/05-conclusion.Rmd", "Chapter/99-references.Rmd"]
+download: [["thesis.pdf", "PDF"], ["thesis.epub", "EPUB"], ["thesis.docx", "Word"]]

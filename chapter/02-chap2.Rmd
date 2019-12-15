@@ -1,0 +1,473 @@
+# Do Investment Agreements Necessarily Cause Offshoring? The Canada-Peru Case
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      fig.show = 'asis',
+                      size='scriptsize',
+                      warning = FALSE, 
+                      results='hide',
+                      comment = FALSE,
+                      message = FALSE)
+require(fpp)
+require(checkpoint)
+require(codetools)
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+#dir.create(".checkpoint")
+#checkpoint("2017-01-01",R.version="3.3.2",checkpointLocation=getwd())
+#datadir<-"~/GitHub/Thesis/data"
+datadir<- "data"
+#figdir<-"~/GitHub/Thesis/figure"
+figdir<- "figure"
+```
+
+---
+ nocite: |
+  @GAC, @CANSIM, @COMTRADE, @WB
+...
+
+
+\vspace{2cm}
+
+## Introduction
+
+There is no worldwide enforceable framework for resolving legal disputes across countries. This leaves countries with the need to form bilateral and multilateral legal international agreements to deal with institutional differences. These agreements cover matters such as taxation, ownership, labour rules and environmental regulations. The potential blurriness between the different legal frameworks is intensified for developed and developing countries, particularly for countries who have incomplete legal institutions. An investment agreement can help establish a reliable contracting environment and may foster foreign investment. 
+
+Foreign Direct Investment (FDI) can provide potential costs savings to firms. First, vertical integration with foreign input suppliers can lower the marginal cost of inputs, as in @AH04. Second, horizontal integration with a foreign distributer can lower the marginal cost of selling to a new market, as in @HMY. 
+
+Figure \ref{iia} shows the cumulative count of all International Investment Agreements (IIA) Canada has signed over the years.^[The types of agreements considered are Free Trade Agreements (FTA), Foreign Investment Protection Agreements (FIPA) and Trade and Economic Cooperation Agreements (TECA). Both FTAs and TECAs normally include clauses regarding investment provisions, or build on pre-existing FIPAs to incorporate investment provisions.]  These IIAs are separated by whether they were signed with a high income country, or a low to middle income country, at the time of enforcement. The cut-offs for income levels are determined using the World Bank income classification method.^[The World Bank classifies countries according to GNI per capita, calculated using the World Bank Atlas method.] Forty-one of Canada's IIAs were signed with low to middle income countries^[Low-income economies are those with a GNI per capita of \$1,045 or less; middle-income economies are those with a GNI per capita of more than \$1,045 but less than \$12,736; high-income economies are those with a GNI per capita of \$12,736 or more.]. A salient characteristic of direct investment between a developed and an emerging country, as reported in @HIE, is that investment tends to flow in larger proportions from the developed country to the emerging country. 
+
+
+```{r IIAplot, out.width='85%', fig.align='center'}
+#load data on Canada's International Investment Agreements
+IIA<-read.csv(file.path(datadir,"IIA.csv"),header=TRUE,sep=",",stringsAsFactors=T)
+#IIA<-read.csv(file.path("data/IIA.csv"),header=TRUE,sep=",",stringsAsFactors=T)
+
+#assign the country income type to be a character variable
+IIA$Type<-as.character(IIA$Type)
+
+#create a variable of all ones to be summed to create a cummulative count
+IIA$val<-rep(1,length(IIA$Type))
+
+#create data frame with all high income countries
+IIARich<-filter(IIA,Type=='High Income')
+for (i in 1:nrow(IIARich)){
+    IIARich$summ[i]<-IIARich$val[i]+i-1}#sum the unitary variable to create a variable keeping cummulative count for the number of agreements signed with rich countries 
+
+#create data frame with all low/middle income countries
+IIAEmer<-filter(IIA,Type=='Low Income'|Type=='Middle Income')
+for (i in 1:nrow(IIAEmer)){
+    IIAEmer$summ[i]<-IIAEmer$val[i]+i-1}#sum the unitary variable to create a variable keeping cummulative count for the number of agreements signed with low/middle countries 
+
+#create legend for graph
+legtxt<-c('Rich','Emerging')
+IIAPeru<-filter(IIAEmer,Country=="Peru")
+
+#plot the cummulative count over the years with each type of country
+IIA <- ggplot()+geom_step(data=IIARich,aes(x=Year.Enforced,y=summ,group="Type"))+geom_point(data=IIARich,aes(x=Year.Enforced,y=summ,shape='a'),size=2.3)+geom_step(data=IIAEmer,aes(x=Year.Enforced,y=summ,group="Type"))+geom_point(data=IIAEmer,aes(x=Year.Enforced,y=summ,shape='e'),size=2.3)+ylab("Cumulative Number of Investment Agreements")+scale_shape(name="Economy Type",breaks=c("a","e"),labels=c('High Income','Low/Middle Income'))+theme_bw()+labs(caption="Source: UNCTAD Division on Investment and Enterprise")+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=12))+
+  scale_x_continuous(breaks = round(seq(min(IIARich$Year.Enforced), max(IIARich$Year.Enforced), by = 2),1))+xlab("Year Enforced")  
+```
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figdir
+png(filename = 'figure/IIA.png')
+IIA
+dev.off()
+```
+
+
+\rtofigure{figure/IIA}{Canadian International Investment Agreements}{}{0.8}{iia}
+
+This paper focuses on the Canada-Peru FIPA for the following reason^[Signed on November 14, 2006 and put into force on June 20, 2007. Following the signing of the Canada-Peru FIPA, a Free Trade Agreement between the two countries was proposed on June 7, 2007, signed on May 29, 2008 and brought into force on August 1, 2009.]. When this research was conducted in 2017, the availability of dependable firm-level Canadian import registry data begin in 2002 and ended in 2012. Most of Canada's agreements with low or middle income countries were signed in the 1990s, with only three agreements signed after 2002 and before 2011, the Canada-Peru FIPA enforced in 2007, the Canada-Jordan FIPA enforced in 2009 and the Canada-Peru FTA  enforce in 2009. The Canada-Jordan agreement is omitted from this paper since even the values of aggregate FDI following the Canada-Jordan FIPA are suppressed to meet the confidentiality requirements of Canada's Statistics Act, meaning that it would not be possible to report any firm-level results. In contrast, Figure \ref{FDI} shows aggregate FDI from Canada to Peru. The year of enforcement of the FIPA in Figure \ref{FDI} is denoted by the gray vertical line in 2007. There was a three-fold increase in investment from Canada to Peru. Peru grew from representing, on average, 0.5\% of of Canada's investments abroad (2000-2007) to, on average, 1\% of Canada's foreign investment (2008-2014).
+
+ <!-- The goal is not necessarily to explain what caused the increase in investment in the Peru case or why the agreement was signed, but rather to document the characteristics of this FDI surge and how it may be associated with offshoring. -->
+
+```{r graph, out.width='85%', fig.align='center'}
+#Load stats canada CANSIM FDI data
+FDISA<-read.csv(file.path(datadir,"cansim-3760051-eng-2994295192748527571.csv"),header=FALSE,sep=",",stringsAsFactors=FALSE)
+
+colname<-as.character(FDISA[c(6),]) #assign row 6 that contains the column names to vector
+colnames(FDISA)<-colname #assign those columns name to the column name of the data frame
+colnames(FDISA)[1]<-"Year" #Rename variable Year
+FDISA<-FDISA[-c(1:6,23:30),] #Remove rows with data descriptions
+
+FDISA$Year<-as.numeric(FDISA$Year) #Assign Year to be a numeric variable
+colnames(FDISA)[2]<-"Value" #Rename FDI variable
+FDISA$Value<-as.numeric(FDISA$Value) #Assign it to be a numeric variable
+
+#Plot Peru FDI stock
+FDIplot <- ggplot()+geom_line(data=FDISA,aes(Year,Value),color="black")+ylab("FDI stock, annual (in $1,000,000)")+theme_bw()+ geom_vline(xintercept = 2007,colour = 'slategrey')+labs(caption="Source: CANSIM Table 376-0051 provided by Statistics Canada [1999-2014]")+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=12))+
+  scale_x_continuous(breaks = round(seq(min(FDISA$Year), max(FDISA$Year), by = 2),1)) +ylim(0,12000)+xlab(NULL)
+
+```
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/FDIplot.png')
+FDIplot
+dev.off()
+```
+
+
+\rtofigure{figure/FDIplot}{Canada's outward FDI position with Peru}{}{0.8}{FDI}
+
+<!-- World Bank, of $1,045 or less in 2014; middle-income economies are those with a GNI per capita of more than $1,045 but less than $12,736; high-income economies are those with a GNI per capita of $12,736 or more. Lower-middle-income and upper-middle-income economies are separated at a GNI per capita of $4,125. -->
+
+A tax treaty between Canada and Peru that was signed on July 20, 2001 preceding the FIPA. This tax treaty went into effect February 17, 2003. The pre-existence of a tax treaty may have contributed to the signing of the FIPA and the resulting increase in investment. In this case, the tax treaty might serve as a necessary, but not sufficient condition for an increase in FDI.
+
+The rest of the paper is as follows. Section 2.2 goes through the prior literature and outlines where this paper falls within. Section 2.3 describes the confidential firm-level data. Section 2.4 outlines the empirical results. Section 2.5 concludes.
+
+## Literature
+
+There are many theoretical models explaining either vertical FDI or horizontal FDI. This paper focuses on the offshoring model of @AH04. Their heterogenous firm model follows from the model of firm ownership by @H and @AP. Other monopolistic competition models have examined the trade-off between FDI and outsourcing at home, @GH, and outsourcing abroad, @GH3. 
+
+The model of @AH04 has heterogenous firms of varying productivity with a North and South country where final goods producers are located in the North. The main driver for offshoring is that wages in the North are higher than wages in the South, making the marginal cost of producing in the South lower. The fixed cost of producing in the South is higher than in the North for these final good producers. As a result, only the most productive Northern firms will offshore production of their intermediate inputs in the South. The degree of offshoring depends on the wage gap between the North and the South, the trading costs, the degree of productivity dispersion and the intensity of headquarter services within a particular sector. Here, we theorize the international investment agreement represents a fall in the fixed cost of investing and examine the associated increase in offshoring done by firms. The signing of an IIA represents a fall in the fixed cost of investment since these agreements typically lower barriers for firms' foreign investment to enter the country.
+
+Another class of models studies horizontal FDI. In @HMY, heterogenous firms of varying productivity can sell their goods domestically, export them to sell to another country or sell them in foreign markets using subsidiaries abroad. This model, in standard form, would predict that a fall in fixed costs of investing in Peru would lead to an increase in exports from Canada to Peru.  As will be shown in Figure \ref{FDIsep}, the increase in total trade between the two countries was driven by an increase in imports from Peru to Canada, while exports remained low and constant.
+
+Related empirical work includes @N who shows empirically that having a reliable contracting environment can serve as a comparative advantage for countries in attracting relationship-specific investment. Also, work on the determinants of vertical FDI includes @AP and @Y using industry-level analysis. @NT use U.S. firm-level cross-sectional data to study the determinants of FDI and find supporting evidence for the theory of @AH04. @BJRS also use cross-sectional firm-level data to determine the product and country characteristics that are associated with more intrafirm trade. They both use countries of all income levels in their analysis. Finally, on the Canadian side, @BG look at export-market participation and productivity performance in Canadian manufacturing plants.
+
+This paper contributes to this literature in the following way. Using Canadian firm-level microdata, it finds that the Canada-Peru FIPA was followed by an increase in Canadian firms' foreign investment, mainly in the mining industry, but did not lead to offshoring in maufacturing, even though the composition of imports between the two countries changed from being primarily raw natural resources to manufactured mining intermediates. This paper contributes a detailed examination of an Investment Agreement between a developed and an emerging economy, in particular, an emerging economy whose main exports worldwide are in natural resources. This is important to Canada since a growing share of its FDI to all countries is in the mining industry (NAICS industry code 21); from 12\% in 2000 to 20\% in 2012. Identifying the salient outcomes of this agreement can help guide future policy with similar resource-focused emerging economies.
+
+## Data
+
+While aggregate Global Affairs Canada data, Statistics Canada data, World @WB data and United Nations @COMTRADE data are used to produce some of the aggregate results, the microdata sets used for this study are a combination of three different firm-level data sets, spanning from 2002 to 2012. 
+
+The first microdata set used is the National Accounts Longitudinal Microdata File, containing firm information on Sales, Individual Labour Units (ILU), Revenue, Expenses and North American Industry Classification System (NAICS) code. 
+
+The second microdata set is the Canadian Direct Investment Abroad (CDIA) with information on firm investment to and from other countries (FDI flow) and the corresponding NAICS industry code for that investment. Both previously mentioned data sets were collected from firms' Canadian tax filing data. 
+
+The final microdata set used is Raw Import Data for Research Purposes provided by the Canada Border Services Agency. It specifies firm imports classified according to the Harmonized System at the six-digit level. All firms can be matched across data sets using an enterprise ID code identifier. The data are confidential and can only be accessed at the Centre for Data Development and Economic Research in Ottawa, Canada. To preserve anonymity of individual firms, Statistics Canada will only permit the disclosures of results that contain a sufficient number of firms. This has restricted the results that may be reported in this study.
+
+
+## Empirical Findings
+
+The empirical findings are presented in the following manner. The first and second sections break down the main results related to FDI and International Trade data independently. The third section discusses firm-level offshoring results. It is found that the firms that increased FDI did not use it to offshore production. As a check, the fourth part of these empirical results presents a regression analysis demonstrating that Canadian firms that increased investment in Peru did not significantly change their employment in Canada. Finally, an aggregate look at Peru's exports to other top destinations will explore the possibility that Canadian firms might have invested in Peru in order to then use it as an export platform to access closer markets.
+
+### Foreign Direct Investment
+
+\begin{figure}
+  \caption{Composition of FDI}
+      \centering
+    \includegraphics[width=0.8\textwidth]{"figure/AFDI"}
+    \caption*{Source: Author's calculation on CDIA data set (Statistics Canada), 2002-2012}
+    \label{FDIsep}
+\end{figure}
+
+As Figure \ref{FDI} previously showed, there is a 3 fold increase in FDI stock from Canada to Peru within 3 years of the introduction of their FIPA in 2007. Figure \ref{FDIsep} uses the microdata to show the aggregate flow of FDI, and also breaks down the amount of this FDI that went specifically into NAICS industry code 21. NAICS code 21 denotes all mining, quarrying, and oil and gas extraction related enterprises. It is the largest category receiving Canadian investment in Peru, both in sheer amount and in the number of firms investing under that industry code. Any other NAICS code that received FDI cannot be reported for confidentiality reasons, as the reporting number of firms is too small.^[In fact, the observation for FDI flow into the mining industry for 2014 had to be suppressed to maintain confidentiality] 
+
+When using the microdata to examine the extensive margin of Canadian firms investing in Peru the following breakdown is observed. There were, in total, 53 distinct firms in the CDIA data set between 2002 and 2012. Of them, 22 firms have recorded investments in Peru both before, and after the enforcement of the FIPA in 2007. On the extensive margin, 18 new firms began investing post-FIPA. 
+
+<!-- The remaining 13 firms only had recorded investments prior to 2007. -->
+
+Labour productivity is measured using a simple measure of sales over individual labour units. Specific kernel density graphical representations of productivity cannot be shown to maintain data confidentiality for firms. On average, firms that invested in Peru were 27.7\% less productive relative to all other Canadian firms investing abroad in any other country. 
+
+### International Trade
+
+Figure \ref{Trade} shows the total trade as a percentage of Canada's nominal GDP, to control for exchange rate fluctuations, between Canada and Peru, from 2002 to 2012. It shows a large increase in total trade after 2004 that was driven mainly by imports from Peru to Canada. Aggregate Canadian exports to Peru are small and show no sharp change in trend. 
+
+
+```{r trade, out.width='85%', fig.align='center'}
+#Load trade data
+TradeDF <- read.csv(file.path(datadir,"WITSdata.csv"),header = TRUE,sep = ",",stringsAsFactors = FALSE) #Import trade data
+TradeDF <- select(TradeDF, Year, TradeFlowName, Total.in.1000.USD) # Keep variables for Year, IM/EX and indicator for whether IM/EX
+colnames(TradeDF)[3] <- "Total" #Rename Column for Total IM/EX
+TradeDF <- spread(TradeDF,TradeFlowName,Total) #Split up Imports and Exports
+TradeDF <- transform(TradeDF, ExportsVal = Export*1000) # Multiply by 1000 since trade value is in thousands of dollars
+TradeDF <- transform(TradeDF, ImportsVal = Import*1000)
+TradeDF <- select(TradeDF, Year, ImportsVal, ExportsVal) #Keep new values
+
+#Load Canadian GDP data
+GDP<-read.csv(file.path(datadir,"CanGDP.csv"),header=TRUE,sep=",",stringsAsFactors=FALSE)
+GDP<-GDP[c(5,7)] #Keep variables on Year and GDP
+GDP<-GDP[c(1:13),] #Remove descriptive rows
+colnames(GDP)[1:2]<-c('Year','GDP') #Rename columns
+
+#Merge TradeDF and GDP data frames
+Trade<-merge(TradeDF,GDP)
+Trade<-transform(Trade, Imports = ImportsVal / GDP) #Get imports over nominal GDP to normalize for fluctuations and prices
+Trade<-transform(Trade, Exports = ExportsVal / GDP) #Get exports over nominal GDP to normalize for fluctuations and prices
+Trade<-transform(Trade, Total = Imports + Exports) # Get value for total trade = imports + exports
+Trade<-select(Trade, Year, Imports, Exports) # Keep relevant variables: Import/GDP, Exports/GDP and TotalTrade/GDP
+Trade<-gather(Trade,variable,value, Imports,Exports) #organize in long format
+
+
+#Plot Imports/GDP, Exports/GDP and TotalTrade/GDP data
+Tradeplot <- ggplot(Trade,aes(x=Year,y=value,group=variable)) + geom_line(aes(ymax=value,colour=variable,linetype=variable), position="stack",size=1.2) + theme_bw() + ylab("Trade stacked as a percentage of GDP")+scale_linetype_manual(values=c("solid", "twodash"),name="value",labels=c('Exports','Imports'))+scale_colour_manual(values=c("darkred", "darkblue"),name="value",labels=c('Exports','Imports'))+ geom_vline(xintercept = 2007,colour = 'slategrey') + labs(caption=" Source: UN Comtrade data provided by World Integrated Trade Solution, 2002-2014")+theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=12))+
+  scale_x_continuous(breaks = round(seq(min(Trade$Year), max(Trade$Year), by = 2),1))+xlab(NULL)
+```
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/Tradeplot.png')
+Tradeplot
+dev.off()
+```
+
+
+\rtofigure{figure/Tradeplot}{Canada's Trade with Peru}{}{0.8}{Trade}
+
+Figure \ref{IM} shows the change in the composition of overall Canadian imports from Peru, following the Harmonized System categorization. Within the top two import categories, HS code 26, ores, slag and ash, represented the largest share of imports prior to 2004 whereas, HS code 71, pearls, precious stones, metals, coins, etc., jumped to over 60\% share of imports post 2004. HS category 26 commonly represents a rawer form of the mining material than HS category 71. This would be an indication of a shift towards more processing of ore to metal within Peru’s borders. Mineral ores are heavier to ship and less valuable than the processed metals they produce. This processing stage for mineral ores can be chemically intensive and requires the development of manufacturing processing plants. 
+
+
+```{r HSplot, size="small", out.width='85%', fig.align='center'}
+#Load trade data
+IM<-read.csv(file.path(datadir,"WITSdata.csv"),header=TRUE,sep=",",stringsAsFactors=FALSE)
+
+colnames(IM)[9]<-"Total" #Rename column for total imports
+IM2671<-select(IM,Total,TradeFlowName,Year,X23.in.1000.USD,X26.in.1000.USD,X71.in.1000.USD) #select variables for Total imports, indicator for whether IM/EX, Year and top 3 HS categories 23, 26 and 71
+colnames(IM2671)[4:6]<-c("23","26","71") #Rename columns for first 2 digits of their HS codes
+PeruHS<-filter(IM2671, TradeFlowName!="Export") #Only keep imports
+PeruHS<-gather(PeruHS,ProductCode,Imports,4:6) #stack into long form of data
+
+PeruHS<-transform(PeruHS,index=Imports/Total) #Generate variable for imports of HS good/total Imports
+PeruHS<-select(PeruHS, Year, ProductCode, index) #Keep only relevant variables
+PeruHS<-filter(PeruHS, ProductCode!="23") # Only keep the top 2 categories
+
+HSplot <- ggplot(PeruHS,aes(x=Year,y=index,group=ProductCode))+geom_line(aes(colour=ProductCode,linetype=ProductCode),size=1.2)+ylab("Imports of good divided by total imports")+scale_linetype_manual(values=c("solid", "twodash"),name="HS code",labels=c('26 - Ores','71 - Metals'))+scale_colour_manual(values=c("darkred", "darkblue"),name="HS code",labels=c('26 - Ores','71 - Metals'))+theme_bw()+ geom_vline(xintercept = 2007,colour = 'slategrey')+labs(caption="UN Comtrade data provided by World Integrated Trade Solution, 2002-2014")+theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=12))+
+  scale_x_continuous(breaks = round(seq(min(PeruHS$Year), max(PeruHS$Year), by = 2),1))+xlab(NULL)#linetype=ProductCode,
+
+```
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/HSplot.png')
+HSplot
+dev.off()
+```
+
+
+\rtofigure{figure/HSplot}{Main import categories}{}{0.8}{IM}
+
+Figure \ref{IMnaics} uses the microdata to show that the top NAICS Sector 2-digit industry codes of the Canadian firms importing from Peru as a share of total imports. This confirms that there is a switch from the largest share of importing firms being listed under NAICS Sector code 21, which designates the mining sector, to the largest share of importing firms listed under NAICS Sector code 33, which is one of the codes designating the manufacturing sector.
+
+Seemingly, this data indicates that the increase in FDI might be associated with an increase in offshoring of Canadian intermediate inputs, developing these manufacturing processing plants in Peru and allowing them to import the more valuable refined mining product. However as we will show in detail in the next section, at the firm level the firms that are importing more of the manufacturing good from Peru are not the same firms conducting the FDI.
+
+
+\begin{figure}
+  \caption{Composition of imports from Peru}
+      \centering
+    \includegraphics[width=0.8\textwidth]{"figure/IMshare"}
+    \caption*{Source: Author's calculation on Raw Import microdata (Statistics Canada), 2002-2012}
+    \label{IMnaics}
+\end{figure}
+
+
+Moreover, there is a time discrepancy between when the switch in imports occurred and when Canadian firms began investing in Peru. The growth of imports is more tightly tied to the initial announcement in August 2002 of the launch of negotiations between Canada and the Andean Community to discuss the formation of a bilateral trade agreement. As mentioned previously, this Free Trade Agreement was signed in 2008 and came into effect in 2009, afer the FIPA. As such, the signing or enactment of this FTA was not associated with all of the increase or change in composition of trade.
+
+Labour productivity for the sample of importing firms is measured using a simple measure of sales over individual labour units. Canadian firms importing from Peru were on average 14.4\% more productive than all other Canadian firms in the import registry, that is all firms that reported imports from abroad.
+
+
+
+
+### Offshoring
+
+Now the key premise of this paper is examined. Was the observed
+increase in FDI associated with Canadian firms offshoring their production of the intermediate mining input? Using firm-level data, it is possible to identify firms that both invested and imported goods from Peru to answer this. As such, it is feasible to disentangle if the shift from importing the primary resource to importing more of its manufactured product was due to the offshoring of the intermediate stage of production from Canada to Peru. As mentioned previously, minerals in their ore form are less valuable, in terms of dollar per pound, than their more refined versions. This creates an incentive for Canadian firms that were importing the mineral ore from Peru to locate this intermediate processing stage closer to the extraction site in Peru, rather than in Canada.
+
+
+The firm-level microdata, however, tell a different story, perhaps foretold by the aggregate import shift beginning around 2004, before the Canada-Peru agreement. Only 14 firms are reported to have both invested and imported goods from Peru for the whole 2002 to 2012 period. Overall, these dual firms' share of investment was 8.55 fold higher than their share of imports. 
+
+The majority of the investment these dual firms reported was listed under the industry NAICS code 21, mining, and none of their imports were listed under NAICS code 33, manufacturing. This sub-sample of firms does not follow the results from the previous section, where aggregate imports show a reversal from industry NAICS code 21 to NAICS code 33. Hence, the bulk of Canadian FDI done in Peru was not for the purpose of offshoring since these firms were not importing the manufactured product and they were investing in the mining sector, not the manufacturing sector. Because there are only 14 dual firms, Statistics Canada restrictions do not permit any more detailed analysis to be conducted on them.
+
+
+It was verified that firm trade was not being done through a third party wholesale trader under NAICS code 41. There was virtually no increase in imports for firms recorded under this category.
+
+There are three potential outcomes of this agreement that cannot be precisely measured with the data sets available. First, firms may have been using horizontal FDI in Peru indirectly by using Peru as a production platform, specifically in mining-derived goods, in order to then export them to nearby markets, such as in other South American countries, Oceania or Asia. Section 2.4.5 will attempt to answer this. Second, contracting done by firms is not recorded in the data. It cannot be observed to what extent firms contracted out some of their activity to Peruvian firms. Third, there exists an argument for firms using FDI abroad in order to secure mining rights in Peru. This would be green field investment use of FDI expenditure in the country. It does not support the possibility that Canadian firms were offshoring production to Peru.
+
+
+
+### Employment
+
+In order to confirm that firms investing in Peru did not offshore by transferring manufacturing on the mining goods from Canada to Peru, an analysis is conducted on domestic employment. A simple regression analysis using the microdata on Canadian firms investing in Peru from 2002 to 2012 is conducted. It finds no significant change in the domestic employment of these firms after the FIPA in 2007. The following regressions test for a structural break in Canadian employment after 2007:
+
+1. Basic:
+
+$$
+\begin{aligned}
+\ln Empl_{i,t} = \alpha + \beta_1\ln FDI_{i,t} + \beta_2 D_{07} + &\beta_3 (\ln FDI_{i,t}*D_{07}) + \epsilon_{i,t}
+\end{aligned}
+$$
+
+2. With control for the mining industry:
+
+$$
+\begin{aligned}
+\ln Empl_{i,t} = \alpha & + \beta_1\ln FDI_{i,t} + \beta_2 D_{07}\\ & + \beta_3 (\ln FDI_{i,t}*D_{07}) + \beta_4 MIN + \beta_5 (MIN*D07)\\ &+\beta_6 (MIN*\ln FDI)+\beta_7(MIN*\ln FDI*D07) + \epsilon_{i,t}
+\end{aligned}
+$$
+
+$Empl$ is the Individual Labour Units employed by firm $i$ in year $t$.^[For a particular business, it measures every individual who appears on the T4 file. They are counted as one ILU if this was their only employer. If an individual received more than one T4 slip, the ILU is split between firms on the basis of their share of wages in different firms.]  $FDI$ is a firm's FDI flow per year. $D_{07}$ is a dummy variable indicating the year is 2007 or later, after the FIPA was implemented. $MIN$ is another dummy variable indicating if the firm's industry code designates NAICS code 21, mining. 
+
+
+
+
+--------------------------------------------------------
+  VARIABLES             lnEmpl            lnEmpl
+-------------------- ----------------- -----------------
+  lnFDI                 -0.136            0.0121
+  
+                        (0.0992)          (0.116)
+                        
+  D07                   -1.491            -2.098
+  
+                        (1.154)           (1.213)
+  
+  lnFDI*D07             0.161             0.216
+  
+                        (0.13)            (0.159)
+  
+  MIN                                     -5.611***
+  
+                                          (1.373)
+                        
+  Min*lnFDI                               0.129
+  
+                                          (0.163)
+                        
+  MIN\*lnFDI*D07                          -0.0642
+  
+                                          0.217
+                        
+  MIN*D07                                 0.853
+  
+                                          (1.897)
+                        
+  Constant              6.339***          7.499***
+  
+                        (0.843)           (0.876)
+
+  Observations 224  
+  
+  *** $p<0.001$,        ** $p<0.01$,      * $p<0.05$
+--------------------------------------------------------
+
+Table: Employment Regression \label{regression1}
+
+
+
+Table \ref{regression1} shows the interaction terms containing $\ln CDIA$ and the 2007 dummy are not statistically significant. Hence, firms investing more in Peru did not significantly decrease their Canadian employment after the enactment of the FIPA. This supports the argument that the FDI was not used for offshoring production by Canadian firms. 
+
+More variations of the regression analysis were conducted. These robustness exercises include controlling for the exchange and tariff rate in both a linear and semi-parametric method. The year of the structural break was also tested to be in 2006 or in 2008. Finally, since the Great Recession falls within this time frame, employment of each firm was divided by total annual employment and firm FDI by total annual FDI, to smooth out any aggregate changes due to the recession and not the agreement. None of these robustness checks yielded results that varied significantly from the results reported in Table \ref{regression1}.
+
+### Peru as an Export Platform
+
+To explore the possibility that Canadian firms were investing in Peruvian mines in order to then export their product to "nearby" locations, such as other South American and Asians markets, Figure \ref{TotalEX} shows aggregate exports to each country normalized to Peru's total world exports.^[Other South American and Asian markets include: Brazil, Chile, China, Colombia, Japan and Venezuela.] Many of these exports increased right around the same time when Peru started exporting more overall, and more metals, to Canada. Splitting these exports into categories, in Figures \ref{26EX} and \ref{71EX}, it is shown that this increase was mainly in the exports of the natural resources derived from mining, HS good category 26, not of the manufactured mining products, HS good category 71. Canada is the largest importer of Peru's manufactured mining product of all these countries representing almost a 30\% share of all of Peru's exports of this good. Due to the aggregate nature of this data, it is not possible to discern how much of these exports to other South American and Asians markets might have been done by Canadian owned enterprises in Peru. 
+
+```{r Exports}
+Exports <- data.table(read.csv(file=file.path(datadir,"PeruExports.csv"), header=TRUE,sep=",",row.names=NULL,stringsAsFactors = T))
+
+#Check totals
+ExportTotal<-Exports[,c(4,6,9:11)]
+colnames(ExportTotal)[1:5]<-c("Country","Year","TotalEX","HS26","HS71")
+ExportTotal<-filter(ExportTotal,Country==c("BRA")|Country==c("CHL")|Country==c("COL")|Country==c("VEN")|Country==c("CHN")|Country==c("JPN")|Country==c("CAN")|Country==c("WLD"))
+#ExportSEA<-filter(ExportTotal,Country==c("CHN")|Country==c("JPN")|Country==c("KOR"))|Country==c("ECU")|Country==c("MEX")|Country==c("KOR")
+#ggplot()+geom_line(data=ExportSA,mapping=aes(Year,TotalEX,colour=Country))
+#ggplot()+geom_line(data=ExportSEA,mapping=aes(Year,HS71,colour=Country))
+EXTotal<-select(ExportTotal,Country,Year,TotalEX)
+EXtot <- EXTotal %>%
+  spread(Country,TotalEX) %>%
+  mutate(BRA=BRA/WLD) %>%
+  mutate(CAN=CAN/WLD) %>%
+  mutate(CHL=CHL/WLD) %>%
+  mutate(CHN=CHN/WLD) %>%
+  mutate(COL=COL/WLD) %>%
+  mutate(JPN=JPN/WLD) %>%
+  mutate(VEN=VEN/WLD) %>%
+  select(-WLD)%>%
+  gather(Country,TotalEX,2:length(unique((EXTotal$Country)))) 
+
+
+                #HERE divide by world
+#Australia, Brazil, Canada, Chile, China, Colombia,China, Japan, Venezuela)
+EXHS26<-select(ExportTotal,Country,Year,HS26)
+EX26 <- EXHS26 %>%
+  spread(Country,HS26) %>%
+  mutate(BRA=BRA/WLD) %>%
+  mutate(CAN=CAN/WLD) %>%
+  mutate(CHL=CHL/WLD) %>%
+  mutate(CHN=CHN/WLD) %>%
+  mutate(COL=COL/WLD) %>%
+  mutate(JPN=JPN/WLD) %>%
+  mutate(VEN=VEN/WLD) %>%
+  select(-WLD)%>%
+  gather(Country,HS26,2:length(unique((EXHS26$Country))))
+
+EXHS71<-select(ExportTotal,Country,Year,HS71)
+EX71 <- EXHS71 %>%
+  spread(Country,HS71) %>%
+  mutate(BRA=BRA/WLD) %>%
+  mutate(CAN=CAN/WLD) %>%
+  mutate(CHL=CHL/WLD) %>%
+  mutate(CHN=CHN/WLD) %>%
+  mutate(COL=COL/WLD) %>%
+  mutate(JPN=JPN/WLD) %>%
+  mutate(VEN=VEN/WLD) %>%
+  select(-WLD)%>%
+  gather(Country,HS71,2:length(unique((EXHS71$Country))))
+
+
+EX1 <- ggplot()+geom_line(data=EXtot,mapping=aes(Year,TotalEX,colour=Country))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 8), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=12))+labs(caption="UN Comtrade data provided by World Integrated Trade Solution, 1998-2014")+
+  scale_x_continuous(breaks = round(seq(min(EXTotal$Year), max(EXTotal$Year), by = 2),1))+xlab(NULL)+ylab("Total Exports to country divided Peru total world exports")+scale_colour_manual(values=c("darkblue","red","darkred","darkgreen","chocolate4","slateblue","darkorange"),labels=c("Brazil","Canada","Chile","China","Colombia","Japan","Venezuela"))
+
+EX2 <- ggplot()+geom_line(data=EX26,mapping=aes(Year,HS26,colour=Country))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 8), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=12))+labs(caption="UN Comtrade data provided by World Integrated Trade Solution, 1998-2014")+
+  scale_x_continuous(breaks = round(seq(min(EXHS26$Year), max(EXHS26$Year), by = 2),1))+xlab(NULL)+ylab("Exports of HS good 26 to country divided Peru HS 26 world exports")+scale_colour_manual(values=c("darkblue","red","darkred","darkgreen","chocolate4","slateblue","darkorange"),labels=c("Brazil","Canada","Chile","China","Colombia","Japan","Venezuela"))
+
+EX3 <- ggplot()+geom_line(data=EX71,mapping=aes(Year,HS71,colour=Country))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 8), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=12))+labs(caption="UN Comtrade data provided by World Integrated Trade Solution, 1998-2014")+
+  scale_x_continuous(breaks = round(seq(min(EXHS71$Year), max(EXHS71$Year), by = 2),1))+xlab(NULL)+ylab("Exports of HS good 71 to country divided Peru HS 71 world exports")+scale_colour_manual(values=c("darkblue","red","darkred","darkgreen","chocolate4","slateblue","darkorange"),labels=c("Brazil","Canada","Chile","China","Colombia","Japan","Venezuela"))
+
+```
+
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/EX1.png')
+EX1
+dev.off()
+```
+
+
+\rtofigure{figure/EX1}{Total Exports from Peru to other South American and Asian Markets}{}{0.8}{TotalEX}
+
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/EX2.png')
+EX2
+dev.off()
+```
+
+
+\rtofigure{figure/EX2}{Exports of raw mining good from Peru to other South American and Asian Markets}{}{0.8}{26EX}
+
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/EX3.png')
+EX3
+dev.off()
+```
+
+
+\rtofigure{figure/EX3}{Exports of manufactured mining good from Peru to other South American and Asian Markets}{}{0.8}{71EX}
+
+## Concluding Remarks
+
+This paper has demonstrated, using firm-level data, that the Canada-Peru FIPA did not lead to more offshoring by Canadian firms, even if the aggregate data seem to indicate such an increase. There is however, no indication that the model of @AH04 is contradicted in this exercise. Peru only represents 0.5\% of Canada's world imports and the distance separating them is fairly significant, making trading costs higher. Higher trading costs are predicted to lead to lower offshoring in their model. As well, Peru is a country that mainly produces natural resources and most of the FDI into Peru went into the mining sector. The mining sector is not very R&D or headquarter intensive sector which also tends to be associated with low offshoring in @AH04.
+
+Overall, the observed changes following the implementation of the Canada-Peru FIPA include an increase in investment, mainly in the mining sector. There was also an increase and change in the composition of imports that is not found to be related to this particular investment agreement or the subsequent increase in investment. There is no statistically significant fall in domestic employment of Canadian firms investing in Peru after the agreement. All these findings combined lead to the conclusion that the Canada-Peru FIPA did not produce an increase in offshoring of Canadian manufacturing. These results may be helpful in evaluating future investment agreements with emerging economies whose primary exports are in natural resources.
+
+
+<!-- # Acknowledgement {-} -->
+
+<!-- *I would like to thank Michael Veall, Pau Pujolas, Gajendran Raveendranathan, as well as the people at the Canadian Centre for Data Development and Economic Research (CDER) for making these data available for research and for all the helpful comments received during my time there. This paper was presented at* -->
+

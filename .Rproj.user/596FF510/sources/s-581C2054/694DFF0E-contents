@@ -1,0 +1,819 @@
+# The Curious Incident of Luxury Imports during the Top-Income Surge
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE, 
+                      results='hide',
+                      comment = FALSE,
+                      message = FALSE,
+                      fig.align='center',
+                      out.width='80%')
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(xtable)
+library(zoo)
+library(stargazer)
+library(plm)
+library(lmtest)
+library(kableExtra)
+datadir<-"data"
+```
+---
+ nocite: |
+  @COMTRADE4,  @OECD4
+...
+
+\vspace{2cm}
+
+```{r DataCleaning}
+
+## Load top 1% share of income data
+Inc <- read.csv(file.path(datadir,"Top1Per.csv"), header = TRUE, stringsAsFactors = FALSE, sep = ",")
+colnames(Inc)[3:20]<-c("Australia","Canada","Denmark","Finland","France","Germany","Ireland","Italy","Japan","Netherlands","Norway","New Zealand","Singapore","Spain","Sweden","Switzerland","United Kingdom","United States")
+Inc<-select(Inc, -Percentile)
+INC<-gather(Inc,Country,Top1P,2:19)
+
+
+## Load import data
+IM <- read.csv(file.path(datadir,"PanelImports.csv"), header = TRUE, stringsAsFactors = FALSE, sep = ",")
+IM <- select(IM,ReporterName,Year,9:16) # Keep variables for Country, Year, Total trade and the 5 luxury SITC goods categories
+colnames(IM) <- c("Country","Year","Total","Pearls","Diamonds","Precious","Fur","Art","GoldSilver","Coins") # Rename variable
+
+# Load GDP Data (current $ps, cst exchange rate, OECD base year (2010), output approach) GDP in millions of dollars
+GDPdata <- read.csv(file.path(datadir,"GDP.csv"), header = TRUE, stringsAsFactors = FALSE, sep = ",")
+GDPdata <- select(GDPdata, Country, Year, Value)
+GDPdata <- mutate(GDPdata, GDP = Value*1000)
+GDPdata <- select(GDPdata, Country, Year, GDP)
+
+# Load GNI data
+GNI <- read.csv(file.path(datadir,"GNI.csv"), header = TRUE, stringsAsFactors = FALSE, sep = ",")
+GNInom <- filter(GNI, MEASURE=="VXCOB")
+GNIreal <- filter(GNI, MEASURE=="VXVOB")
+
+# Select GNI Data (current $ps, cst exchange rate) millions of dollars
+GNInom <- select(GNInom, Country, Year, Value)
+GNInom <- mutate(GNInom, GNInom = Value)
+GNInom <- select(GNInom, Country, Year, GNInom)
+
+# Select real GNI Data (constant $ps, cst exchange rate) millions of dollars
+GNIreal <- select(GNIreal, Country, Year, Value)
+GNIreal <- mutate(GNIreal, GNIreal = Value)
+GNIreal <- select(GNIreal, Country, Year, GNIreal)
+GNIdata <- full_join(GNInom, GNIreal, by = c("Year","Country")) # Merge GNI data sets
+
+Data2 <- full_join(INC, IM, by = c("Year","Country")) # Merge both data sets
+Data1 <- full_join(Data2, GDPdata, by = c("Year","Country")) # Merge both data sets
+Data <- full_join(Data1, GNIdata, by = c("Year","Country")) # Merge both data sets
+Data <- mutate(Data,Group1=ifelse(Country=="Australia" | Country=="Canada" | Country=="Ireland" | Country=="New Zealand" |  Country=="United Kingdom" | Country=="United States" ,1,0)) # Assign a dummy variable indicating the English speaking countries
+
+Data <- filter(Data, !Country=="Spain" & !Country=="Singapore" & !Country=="Ireland" & !Country=="Germany") # Remove Spain
+
+Data <- filter(Data, Year<2015)
+
+
+## Divide imports of each goods category by total trade
+Data <- mutate(Data, pearlsT=log(Pearls/Total))
+Data <- mutate(Data, diamondsT=log(Diamonds/Total))
+Data <- mutate(Data, preciousT=log(Precious/Total))
+Data <- mutate(Data, furT=log(Fur/Total))
+Data <- mutate(Data, artT=log(Art/Total))
+Data <- mutate(Data, goldsilverT=log(GoldSilver/Total))
+Data <- mutate(Data, coinsT=log(Coins/Total))
+
+## Divide imports by GDP of the country
+Data <- mutate(Data, pearls=log(Pearls/GDP))
+Data <- mutate(Data, diamonds=log(Diamonds/GDP))
+Data <- mutate(Data, precious=log(Precious/GDP))
+Data <- mutate(Data, fur=log(Fur/GDP))
+Data <- mutate(Data, art=log(Art/GDP))
+Data <- mutate(Data, goldsilver=log(GoldSilver/GDP))
+Data <- mutate(Data, coins=log(Coins/GDP))
+
+## Divide imports by GNI of the country
+Data <- mutate(Data, pearlsGNI=log(Pearls/GNInom))
+Data <- mutate(Data, diamondsGNI=log(Diamonds/GNInom))
+Data <- mutate(Data, preciousGNI=log(Precious/GNInom))
+Data <- mutate(Data, furGNI=log(Fur/GNInom))
+Data <- mutate(Data, artGNI=log(Art/GNInom))
+Data <- mutate(Data, goldsilverGNI=log(GoldSilver/GNInom))
+Data <- mutate(Data, coinsGNI=log(Coins/GNInom))
+
+Data <- mutate(Data, lnGNIreal=log(GNIreal))
+Data <- mutate(Data, lnTop1P=log(Top1P))
+
+
+Group1<-filter(Data,Group1==1)
+Group2<-filter(Data,Group1==0)
+
+
+G7<-filter(Data, Country=="Canada" | Country=="France" | Country=="Italy" | Country=="Japan" | Country=="United Kingdom" | Country=="United States")
+G7$Group1 <- as.factor(G7$Group1)
+
+#write.table(Data, file = "DataClean.csv", append = FALSE, quote = TRUE, sep = ",",eol = "\n", na = "NA", dec = ".", row.names = TRUE,col.names = TRUE, qmethod = c("escape", "double"),fileEncoding = "")
+
+```
+
+
+## Introduction
+
+Atkinson, Piketty and Saez (2011, henceforward APS) show that the top 1% share of income in developed countries, measured using administrative taxfiler data, increased sharply in the late 1980s and 1990s in  English speaking countries (henceforward:  surge countries) but not in  continental European countries and Japan (henceforward  no-surge countries). This difference had not been apparent in survey data, because of survey sampling error, top-coding and under-response by those with high incomes.
+
+What have been the trends in consumption by those with top-end incomes? Expenditure survey data share the same flaws at the top end as income survey data and there is no comprehensive administrative expenditure microdata. As an imperfect attempt, we use the Comtrade administrative trade data set for international comparisons of imports. One might expect a higher rate of increase of imports (corrected for re-import) of  luxury goods for those countries with a measured top income surge. We report the puzzle that there is no such pattern.
+
+In section 2, we provide additional context. Section 3 describes our empirical findings. In section 4, we suggest as possible explanations either measurement issues, e.g. that top-income trends have been mismeasured by taxfiler data or that top-income individuals do not have a particularly high marginal propensity to consume these luxury goods, at least within their own countries. Regardless, our results provide a fragment of evidence that there may not have been a relative increase in top-end domestic consumption inequality in surge countries relative to no-surge countries. In section 5, various robustness exercises are conducted. Section 6 concludes.
+
+
+    
+## Context 
+
+@APS summarizes a large literature (e.g.  @AP, @P and @L) examining international differences in the rate of change of taxfiler top income shares across developed countries. As noted in the introduction, a principal APS finding is that some countries experienced top-income surges beginning about 1980 and some did not. Figure \ref{1P} illustrates using the top 1% income shares for the G7 countries, excepting Germany.^[Data are from the World Inequality Database (@WID) for 1962 to 2014, as available. Income is market income either per tax unit or per adult without capital gains (except for the U.K. prior to 1965, when they are unavoidably included).] $^,$ ^[APS included Germany as a no-surge country based on the data of @D which has little evidence of a surge up to its endpoint of 1998. But we omit Germany because more recent estimates in the World Inequality Database suggest a significant surge since 1998 and the alternative estimates of @BCS suggest there was an earlier top-end surge, concentrated at the very top, a finding with some support in the case of German CEOs in @FM and in wage data in @DJS] For each year, we compute the average of the values for Canada, the United Kingdom and the United States and then smooth these averages over time.^[Smoothing is done using the LOESS procedure in R, with 95% confidence intervals added.] The top-income surge found by APS for these countries is clear. When the same calculation is performed for France, Italy and Japan, there is clearly no surge, again consistent with the APS finding for these countries. 
+```{r TopshareplotG1}
+
+
+Top1<-ggplot(G7,aes(Year,Top1P,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country, colour=Group1),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+theme_bw()+labs(caption="Source: World Wealth and Income Database, WID.world", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1)) +ylab(NULL) +ylim(0,0.22)+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+#ggplot(G7,aes(Year,Top1P,colour=Country))+geom_line(aes(linetype=Country),size=0.8)+geom_point(aes(shape=Country))+theme_bw()+labs(title="Figure 1: Top 1% income shares by countries", caption="Source: World Wealth and Income Database, WID.world")+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+xlab(NULL) +  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1)) +ylab(NULL) +ylim(0,0.22)
+
+
+```
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/Top1.png')
+Top1
+dev.off()
+```
+
+
+\rtofigure{figure/Top1}{Top 1\% income shares by countries}{}{0.8}{1P}
+
+
+
+## Luxury Imports
+
+The longest available data series (Standard International Trade Classification, Revision 1) are available from 1962 to 2014. We study the following apparent luxury goods: 
+
+ 1. pearls, not set or strung (SITC 6671); 
+ 2. other precious & semi precious stones not set (SITC 6673)); 
+ 3. diamonds, not industrial, not set or strung (SITC 6672); 
+ 4. works of art, collectors pieces and antiques (SITC 8960); 
+ 5. gold, silver and platinum jewellery less watchcases (SITC, 8971);
+ 6. fur clothing (SITC 8420); and 
+ 7. coin, other than gold, not being legal tender (SITC, 9610). 
+ 
+ We aggregate these annually for each country using U.S. dollar values and graph over time each import aggregate by country as fraction of that country's GDP.
+
+
+```{r Pearls}
+
+#Group1$Country<-as.factor(as.character(Group1$Country))
+
+
+#G7 <- mutate(G7, PearlstoGDP=exp(pearls))
+
+pearls<-ggplot(G7,aes(Year,pearls,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1))  +ylab("log Imports/GDP")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+precious<-ggplot(G7,aes(Year,precious,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("non-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1)) +ylab("log Imports/GDP")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+diamonds<-ggplot(G7,aes(Year,diamonds,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1)) +ylab("log of Imports/GDP ")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+art<-ggplot(G7,aes(Year,art,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1))  +ylab("log of Imports/GDP")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+goldsilver<-ggplot(G7,aes(Year,goldsilver,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1))  +ylab("log of Imports/GDP")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+fur<-ggplot(G7,aes(Year,fur,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1)) +ylab("log of Imports/GDP")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+coins<-ggplot(G7,aes(Year,coins,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1))  +ylab("log of Imports/GDP")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+```
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/pearls.png')
+pearls
+dev.off()
+
+png(filename = 'figure/precious.png')
+precious
+dev.off()
+
+png(filename = 'figure/diamonds.png')
+diamonds
+dev.off()
+
+png(filename = 'figure/art.png')
+art
+dev.off()
+
+png(filename = 'figure/goldsilver.png')
+goldsilver
+dev.off()
+
+png(filename = 'figure/fur.png')
+fur
+dev.off()
+
+png(filename = 'figure/coins.png')
+coins
+dev.off()
+```
+
+
+\rtofigure{figure/pearls}{Pearls, not set or strung}{}{0.8}{pearls}
+
+\rtofigure{figure/precious}{Other precious \& semi precious stones not set}{}{0.8}{precious}
+
+\rtofigure{figure/diamonds}{Diamonds, not industrial, not set or strung}{}{0.8}{diamonds}
+
+\rtofigure{figure/art}{Works of art,collectors pieces}{}{0.8}{art}
+
+\rtofigure{figure/goldsilver}{Gold, silver and platinum jewellery less watchcases}{}{0.8}{goldsilver}
+
+\rtofigure{figure/fur}{Fur Clothing}{}{0.8}{fur}
+
+\rtofigure{figure/coins}{Coin, other than gold, not being legal tender}{}{0.8}{coins}
+
+Even with a log scale, the resulting Figures \ref{pearls} to \ref{coins} are somewhat noisy. But when we calculate smoothed averages in the same manner as in Figure \ref{1P}, it is clear that despite the various idiosyncratic shocks for the different luxury goods, if anything the no-surge countries France, Italy and Japan had a larger average increase in the import-to-GDP ratios since 1980 than did the surge countries Canada, the U.K. and the U.S. Specifically while measured top incomes were increasing sharply post-1980 in surge countries, the figures show that the import-to-GDP ratios (a) for pearls declined slightly for all countries except there was an increase in Japan, a no-surge country (b) for precious stones mostly declined, with the sharpest falls for surge country Canada and no-surge Japan (c) continued at higher levels for the surge countries U.S. and U.K. for diamonds, works of Artwork and jewellery, but with no differential trends between the surge and no-surge countries except perhaps for jewellery, where the no-surge country trend appears greater (d) for furs declined uniformly with some rebound in the no-surge countries and (e) fell erratically for coins, but with a sharper initial fall in surge countries followed by no differential trend in the averages.
+
+A simple example of a difference-in-difference regression with import-to-GDP ratios as the dependent variables and as right-hand-side variables an intercept, a surge country dummy, a post-1980 dummy and an interaction of the two dummies is:
+
+$$
+\begin{aligned}
+IM_{i,t} =\alpha_i+&\beta_1\text{Surge}+\beta_2\text{1980}+\beta_3(\text{Surge} * \text{1980})+u_{i,t}
+\end{aligned}
+$$
+
+The coefficient of the last variable, $\beta_3$, is an estimate of the post-1980 change in mean import ratios for surge as compared to no-surge countries. Table \ref{main} shows that these coefficients for the sample of countries in Figure \ref{1P} are always negative in sign and sometimes even statistically significant. Hence, the post-1980 top-income surge appears to be associated with if anything a smaller rather than a larger post-1980 increase in luxury import ratios in those countries that had it in comparison to those countries that did not. In the next section, we find similar graphical results for import-to-total-import ratios and when other APS surge and no-surge countries are included. We also have estimated a number of regressions using various sets of surge and no-surge countries, all yielding results consistent with our graph-based discussion here. This result holds as well under a number of changes, such as when the break year is changed from 1980 to 1983 or 1985, when the import ratio denominator is changed to total imports from GDP, when GNI is used instead of GDP or when different countries are added.
+
+
+
+```{r plm}
+G7$Group1<-as.numeric(as.character(G7$Group1))
+G7<- mutate(G7,dum=ifelse(Year>=1980,1,0)) # Create dummy for year>1980 and interaction terms
+G7<-mutate(G7, dum1P=dum*lnTop1P)
+G7<-mutate(G7, Group1P=Group1*lnTop1P)
+G7<-mutate(G7, Group1dum=dum*Group1)
+G7<-mutate(G7, Group1Pdum=dum1P*Group1)
+
+# Declare as panel data
+#Data.plm<-pdata.frame(Data)
+G7plm<-pdata.frame(G7)
+```
+
+```{r pearls}
+# Difference-in-difference
+
+#Pearls
+fixedPG7DD<-plm(pearls~dum+Group1+Group1dum, data=G7plm, model="within")
+
+#Precious stones
+fixedPrG7DD<-plm(precious~dum+Group1+Group1dum, data=G7plm, model="within")
+
+#Diamonds
+fixedDG7DD<-plm(diamonds~dum+Group1+Group1dum, data=G7plm, model="within")
+
+#Artwork
+fixedAG7DD<-plm(art~dum+Group1+Group1dum, data=G7plm, model="within")
+
+#Gold and silver
+fixedGG7DD<-plm(goldsilver~dum+Group1+Group1dum, data=G7plm, model="within")
+
+#Fur
+fixedFG7DD<-plm(fur~dum+Group1+Group1dum, data=G7plm, model="within")
+
+#Coins
+fixedCG7DD<-plm(coins~dum+Group1+Group1dum, data=G7plm, model="within")
+```
+
+
+
+```{r resultDD, results='asis'}
+stargazer(fixedPG7DD, fixedPrG7DD,fixedDG7DD,fixedAG7DD,fixedGG7DD,fixedFG7DD,fixedCG7DD,omit.stat=c("f","rsq","adj.rsq"),keep="Group1dum",covariate.labels=" ",title = "Difference-in-Difference Coefficient Estimates of Differential Effects of Top-Income Surge on Import Shares of Surge Countries, 1962-2014 (unbalanced panel)", font.size = "footnotesize", header = FALSE, dep.var.labels =c("Pearls","Precious","Diamonds","Artwork","Jewellery","Fur","Coins"),label = "main")#,note="Sample contains same countries as Figure 1",out="Table1.txt")
+```
+
+## Possible Explanations
+
+It is possible that the import data are inadequate to the task, although we find it striking that the results are so consistent across the imported goods.  It is also possible that the surge has been overestimated in the countries we call surge countries or underestimated in the no-surge countries, in the latter case perhaps because of misreporting in income tax filings.^[There is some debate as to whether the U.S. top income surge is as large as indicated by Figure \ref{1P}, based on the World Inequality Database.  @SV and @V argue that the Canadian surge was in part caused by, and hence indirectly provides evidence of,  a U.S. surge.  But others e.g. @ABL and @AS find that the measured U.S. surge is smaller when different definitions of income are used that incorporate in-kind government transfers and accommodate changes in U.S. tax law. One recent major paper @JK takes as given that there has been a large U.S. top income surge in comparison to
+small increases in France and Japan and then develops a theoretical model to explain the
+difference.] The other explanation is that there really was a differential surge but that high-income individuals in surge countries do not have a particularly high marginal propensity to consume these luxury goods, at least domestically. The possibility remains that they purchase these goods in other countries, perhaps in small tax havens (a proposition we have been unable to test because of data quality issues). We  test the average elasticity of these goods in the next section.
+
+There are also other less tangible items the top 1\% may be spending consuming more differentially across countries such as education, housing and services. We attempted to look for sources of data on nationally averaged housing or education prices across countries, but were unable to find readily available data series that begins earlier than the 1990s.
+
+## Robustness
+
+This section outlines the following robustness checks:
+
+ - Dividing trade in each good's category by total imports instead of GDP.
+ - Using a broader range of countries.^[Country list available in Table \ref{tableA2} of the Appendix]
+ - Checking the overall elasticities of the set of luxury goods we used in our analysis.
+ - Checking alternate break points in 1983 and 1985 instead of 1980.
+ - Testing another potential luxury good, imports of Swedish cars.
+
+ <!-- - Estimating the change in imports that was associated to the change in the top 1\% share of income. -->
+ <!-- -->
+
+Overall, there is not much difference in the sign or significance of the coefficients, except in the third exercise where we use the top 1\% share of income for each country instead of a difference-in-difference comparing Group 1 countries versus none Group 1 countries. 
+ 
+### Total Imports 
+
+```{r ShareTrade}
+#G7
+
+fixedPG7TDD<-plm(pearlsT~dum+Group1+Group1dum, data=G7plm, model="within")
+
+fixedDG7TDD<-plm(diamondsT~dum+Group1+Group1dum, data=G7plm, model="within")
+
+fixedPrG7TDD<-plm(preciousT~dum+Group1+Group1dum, data=G7plm, model="within")
+
+fixedAG7TDD<-plm(artT~dum+Group1+Group1dum, data=G7plm, model="within")
+
+fixedGG7TDD<-plm(goldsilverT~dum+Group1+Group1dum, data=G7plm, model="within")
+
+fixedFG7TDD<-plm(furT~dum+Group1+Group1dum, data=G7plm, model="within")
+
+fixedCG7TDD<-plm(coinsT~dum+Group1+Group1dum, data=G7plm, model="within")
+
+```
+
+In this robustness check, we use the same difference-in-difference regression as before, however, this time we use imports of the luxury good as a share of total imports, instead of as a share of GDP. The same group of countries is used as in the main difference-in-difference regression. The results in Table \ref{TradeDD} are very similar to the previous with coefficients that are all negative in sign and some are statistically significant. Figures \ref{pearlsT} to \ref{coinsT} in the appendix reinforce the difference-in-difference results.
+
+```{r resultTradeDDG7, results='asis'}
+stargazer(fixedPG7TDD,fixedDG7TDD,fixedPrG7TDD,fixedAG7TDD,fixedGG7TDD,fixedFG7TDD,fixedCG7TDD,omit.stat=c("f","rsq","adj.rsq"),keep="Group1dum",covariate.labels=" ",title = "Difference-in-Difference Coefficient Estimates of Differential Effects of Top-Income Surge on Import Shares of Surge Countries, 1962-2014 (Total imports)", font.size = "footnotesize", header = FALSE, dep.var.labels =c("Pearls","Precious","Diamonds","Artwork","Jewellery","Fur","Coins"),label = "TradeDD")
+```
+
+
+
+### Larger country sample
+
+```{r plm2}
+
+Data<- mutate(Data,dum=ifelse(Year>=1980,1,0)) # Create dummy for year>1980 and interaction terms
+Data<-mutate(Data, dum1P=dum*lnTop1P)
+Data<-mutate(Data, Group1P=Group1*lnTop1P)
+Data<-mutate(Data, Group1dum=dum*Group1)
+Data<-mutate(Data, Group1Pdum=dum1P*Group1)
+
+# Declare as panel data
+Data.plm<-pdata.frame(Data)
+```
+
+```{r pearlsall}
+# Difference-in-difference
+
+#Pearls
+fixedPallDD<-plm(pearls~dum+Group1+Group1dum, data=Data.plm, model="within")
+
+#Precious stones
+fixedPrallDD<-plm(precious~dum+Group1+Group1dum, data=Data.plm, model="within")
+
+#Diamonds
+fixedDallDD<-plm(diamonds~dum+Group1+Group1dum, data=Data.plm, model="within")
+
+#Artwork
+fixedAallDD<-plm(art~dum+Group1+Group1dum, data=Data.plm, model="within")
+
+#Gold and silver
+fixedGallDD<-plm(goldsilver~dum+Group1+Group1dum, data=Data.plm, model="within")
+
+#Fur
+fixedFallDD<-plm(fur~dum+Group1+Group1dum, data=Data.plm, model="within")
+
+#Coins
+fixedCallDD<-plm(coins~dum+Group1+Group1dum, data=Data.plm, model="within")
+```
+
+A larger sample of countries is used. Namely: `r unique(Data$Country)`. The classification of each country follows @APS to categorize them into Group 1, 2 or 3 countries. Countries in Group 1 are assigned a $1$ for the Group 1 dummy and Groups 2 and 3 are assigned a $0$. Table \ref{tableA2} in the appendix contains the full list of countries with their classification. The results in Table \ref{all} are mixed, some coeffients remain negative, while those for pearls, jewellery and fur become positive. The coefficient for fur even becomes positive and significant. 
+
+```{r resultallDD, results='asis'}
+stargazer(fixedPallDD, fixedPrallDD,fixedDallDD,fixedAallDD,fixedGallDD,fixedFallDD,fixedCallDD,omit.stat=c("f","rsq","adj.rsq"),keep="Group1dum",covariate.labels=" ",title = "Difference-in-Difference Coefficient Estimates of Differential Effects of Top-Income Surge on Import Shares of Surge Countries, 1962-2014 (larger sample)", font.size = "footnotesize", header = FALSE, dep.var.labels =c("Pearls","Precious","Diamonds","Artwork","Jewellery","Fur","Coins"),label = "all")#,note="Sample contains same countries as Figure 1")#,out="Table1.txt")
+```
+ 
+
+<!-- ## Top 1 percent share -->
+
+<!-- ```{r} -->
+
+<!-- # pearlsFE<-plm(pearls~lnTop1P+dum+dum1P, data=Data, model="within") -->
+<!-- #  -->
+<!-- # diamondsFE<-plm(diamonds~lnTop1P+dum+dum1P, data=Data, model="within") -->
+<!-- #  -->
+<!-- # preciousFE<-plm(precious~lnTop1P+dum+dum1P, data=Data, model="within") -->
+<!-- #  -->
+<!-- # artFE<-plm(art~lnTop1P+dum+dum1P, data=Data, model="within") -->
+<!-- #  -->
+<!-- # goldsilverFE<-plm(goldsilver~lnTop1P+dum+dum1P, data=Data, model="within") -->
+<!-- #  -->
+<!-- # furFE<-plm(fur~lnTop1P+dum+dum1P, data=Data, model="within") -->
+<!-- #  -->
+<!-- # coinsFE<-plm(coins~lnTop1P+dum+dum1P, data=Data, model="within") -->
+
+<!-- #G7 -->
+<!-- pearlsFEG7<-plm(pearls~lnTop1P+dum+dum1P, data=G7plm, model="within") -->
+
+<!-- diamondsFEG7<-plm(diamonds~lnTop1P+dum+dum1P, data=G7plm, model="within") -->
+
+<!-- preciousFEG7<-plm(precious~lnTop1P+dum+dum1P, data=G7plm, model="within") -->
+
+<!-- artFEG7<-plm(art~lnTop1P+dum+dum1P, data=G7plm, model="within") -->
+
+<!-- goldsilverFEG7<-plm(goldsilver~lnTop1P+dum+dum1P, data=G7plm, model="within") -->
+
+<!-- furFEG7<-plm(fur~lnTop1P+dum+dum1P, data=G7plm, model="within") -->
+
+<!-- coinsFEG7<-plm(coins~lnTop1P+dum+dum1P, data=G7plm, model="within") -->
+
+<!-- RESETP<-resettest(lm(pearls ~ Group1+dum+Group1dum, data=G7,x=T, y=T)) -->
+<!-- RESETD<-resettest(lm(diamonds ~ Group1+dum+Group1dum, data=G7,x=T, y=T)) -->
+<!-- RESETPr<-resettest(lm(precious ~ Group1+dum+Group1dum, data=G7,x=T, y=T)) -->
+<!-- RESETA<-resettest(lm(art ~ Group1+dum+Group1dum, data=G7,x=T, y=T)) -->
+<!-- RESETG<-resettest(lm(goldsilver ~ Group1+dum+Group1dum, data=G7,x=T, y=T)) -->
+<!-- RESETF<-resettest(lm(fur ~ Group1+dum+Group1dum, data=G7,x=T, y=T)) -->
+<!-- RESETC<-resettest(lm(coins ~ Group1+dum+Group1dum, data=G7,x=T, y=T)) -->
+
+<!-- RESETP2<-resettest(lm(pearls ~ lnTop1P+dum+dum1P, data=G7,x=T, y=T)) -->
+<!-- RESETD2<-resettest(lm(diamonds ~ lnTop1P+dum+dum1P, data=G7,x=T, y=T)) -->
+<!-- RESETPr2<-resettest(lm(precious ~ lnTop1P+dum+dum1P, data=G7,x=T, y=T)) -->
+<!-- RESETA2<-resettest(lm(art ~ lnTop1P+dum+dum1P, data=G7,x=T, y=T)) -->
+<!-- RESETG2<-resettest(lm(goldsilver ~ lnTop1P+dum+dum1P, data=G7,x=T, y=T)) -->
+<!-- RESETF2<-resettest(lm(fur ~ lnTop1P+dum+dum1P, data=G7,x=T, y=T)) -->
+<!-- RESETC2<-resettest(lm(coins ~ lnTop1P+dum+dum1P, data=G7,x=T, y=T)) -->
+
+<!-- ``` -->
+
+
+<!-- In this exercise, instead of splitting countries into Group 1 and not Group 1 countries, we use each country's share of the top 1\% of income. We test for a structural break after 1980 for countries that had higher shares of income in the top 1\% of the distribution. We would expect that countries with higher top 1\% shares would import more of the luxury good. The regression is as follows: -->
+<!-- $$ -->
+<!-- \begin{aligned} -->
+<!-- IM_{i,t} =\alpha_i+&\beta_1\text{1980}+\beta_2\ln\text{Share}_{i,t}+\beta_3(\ln\text{Share}_{i,t} * \text{1980})+u_{i,t} -->
+<!-- \end{aligned} -->
+<!-- $$ -->
+
+<!-- Here imports are defined as in the main exercise as the natural logarithm of the ratio of imports of each good divided by GDP. The results do vary significantly  -->
+
+
+
+<!-- ```{r, results='asis'} -->
+<!-- stargazer(pearlsFEG7,diamondsFEG7,preciousFEG7,artFEG7,goldsilverFEG7,furFEG7,coinsFEG7,omit.stat=c("f","rsq","adj.rsq"),keep="dum1P",covariate.labels=" ",title = "Difference-in-Difference Coefficient Estimates of Differential Effects of Top-Income Surge on Import Shares of Surge Countries, 1962-2014 (share of income)", font.size = "footnotesize", header = FALSE, dep.var.labels =c("Pearls","Precious","Diamonds","Artwork","Jewellery","Fur","Coins")) -->
+<!-- ``` -->
+
+
+<!-- An interesting point to note is that, when running a Ramsey RESET test for model specification on the model using the share of top 1\%, the test rejects the model specification for most of the luxury. However, in our main sepcification that uses Group 1 and non-Group 1 dummies, the RESET test fails to reject the specification for all goods. While the RESET can lack power to reject model specification, it shows some evidence that maybe the fault resides more in the spefication for this regression rather than our previous results and other robustness checks. -->
+
+### Real Incomes
+
+```{r GNI}
+G7GNI<-filter(G7,!Country=="United Kingdom")
+
+G7GNI.plm<-pdata.frame(G7GNI)
+
+# % share
+# fixedPalls<-plm(pearlsGNI~lnTop1P+lnGNIreal, data=Data, model="within")
+#
+# fixedDalls<-plm(diamondsGNI~lnTop1P+lnGNIreal, data=Data, model="within")
+#
+# fixedPralls<-plm(preciousGNI~lnTop1P+lnGNIreal, data=Data, model="within")
+#
+# fixedAalls<-plm(artGNI~lnTop1P+lnGNIreal, data=Data, model="within")
+#
+# fixedGalls<-plm(goldsilverGNI~lnTop1P+lnGNIreal, data=Data, model="within")
+#
+# fixedFalls<-plm(furGNI~lnTop1P+lnGNIreal, data=Data, model="within")
+#
+# fixedCalls<-plm(coinsGNI~lnTop1P+lnGNIreal, data=Data, model="within")
+#### G7 countries
+# % share
+fixedPG7s<-plm(pearlsGNI~lnTop1P+lnGNIreal, data=G7GNI.plm, model="within")
+
+fixedDG7s<-plm(diamondsGNI~lnTop1P+lnGNIreal, data=G7GNI.plm, model="within")
+
+fixedPrG7s<-plm(preciousGNI~lnTop1P+lnGNIreal, data=G7GNI.plm, model="within")
+
+fixedAG7s<-plm(artGNI~lnTop1P+lnGNIreal, data=G7GNI.plm, model="within")
+
+fixedGG7s<-plm(goldsilverGNI~lnTop1P+lnGNIreal, data=G7GNI.plm, model="within")
+
+fixedFG7s<-plm(furGNI~lnTop1P+lnGNIreal, data=G7GNI.plm, model="within")
+
+fixedCG7s<-plm(coinsGNI~lnTop1P+lnGNIreal, data=G7GNI.plm, model="within")
+
+# ElasticityP <- (fixedAG7s$coefficients[2]-1)/sqrt(fixedAG7s$vcov[2,2])
+
+
+```
+
+$$
+\begin{aligned}
+\ln IM_{i,t} =\alpha_i+&\beta_1\text{GNI}^{real}_{i,t}+\beta_2\ln\text{Share}_{i,t}+u_{i,t}
+\end{aligned}
+$$
+
+This time imports are defined as the natural logarithm of the ratio of imports of each good divided by nominal Gross National Income and $GNI^{real}$ is real Gross National Income. For this analysis, the United Kingdom had to be removed due to real Gross National Income not being available before 1999. The idea is to control for changes in real incomes in each country and check the validity of using the HS categories of goods we selected as luxury goods.
+
+
+
+```{r resultTradeG7, results='asis'}
+stargazer(fixedPG7s,fixedDG7s,fixedPrG7s,fixedAG7s,fixedGG7s,fixedFG7s,fixedCG7s,omit.stat=c("f","rsq","adj.rsq"),keep=c("lnTop1P","lnGNIreal"),covariate.labels=c("Share","Real GNI"),title = "Difference-in-Difference Coefficient Estimates of Differential Effects of Top-Income Surge on Import Shares of Surge Countries, 1962-2014 (real incomes)", font.size = "footnotesize", header = FALSE, dep.var.labels =c("Pearls","Precious","Diamonds","Artwork","Jewellery","Fur","Coins"),label="GG")
+```
+
+
+Table \ref{GG} shows that for a higher share of income at the top 1\%, imports of luxury goods were associated with no significant change for diamonds, a positive significant change for jewellery, coins, precious stones, fur and artwork, and an opposite change for pearls and fur.
+
+As real income goes up, the imports as a fraction of income fall for coins, fur and artwork (although not significantly for artwork).  Therefore there is some doubt as to whether they are empirically luxury goods.
+
+
+### Structural break in 1983 and 1985
+
+```{r plm8385}
+G7<- mutate(G7,dum83=ifelse(Year>=1983,1,0)) # Create dummy for year>1980
+G7<- mutate(G7,dum85=ifelse(Year>=1985,1,0))
+G7<-mutate(G7, Group1P=Group1*lnTop1P)
+G7<-mutate(G7, dum831P=dum83*lnTop1P)
+G7<-mutate(G7, Group1dum83=dum83*Group1)
+G7<-mutate(G7, Group1Pdum83=dum831P*Group1)
+G7<-mutate(G7, dum1P85=dum85*lnTop1P)
+G7<-mutate(G7, Group1dum85=dum85*Group1)
+G7<-mutate(G7, Group1Pdum85=dum1P85*Group1)
+
+G7.plm2<-pdata.frame(G7)
+# Group1<-pdata.frame(Group1)
+# Group2<-pdata.frame(Group2)
+```
+
+```{r 8385}
+
+
+fixedPall85<-plm(pearls~dum85+Group1+Group1dum85, data=G7.plm2, model="within")
+fixedPall83<-plm(pearls~dum83+Group1+Group1dum83, data=G7.plm2, model="within")
+
+fixedDall85<-plm(diamonds~dum85+Group1+Group1dum85, data=G7.plm2, model="within")
+fixedDall83<-plm(diamonds~dum83+Group1+Group1dum83, data=G7.plm2, model="within")
+
+fixedPrall85<-plm(precious~dum85+Group1+Group1dum85, data=G7.plm2, model="within")
+fixedPrall83<-plm(precious~dum83+Group1+Group1dum83, data=G7.plm2, model="within")
+
+fixedAall85<-plm(art~dum85+Group1+Group1dum85, data=G7.plm2, model="within")
+fixedAall83<-plm(art~dum83+Group1+Group1dum83, data=G7.plm2, model="within")
+
+fixedGall85<-plm(goldsilver~dum85+Group1+Group1dum85, data=G7.plm2, model="within")
+fixedGall83<-plm(goldsilver~dum83+Group1+Group1dum83, data=G7.plm2, model="within")
+
+fixedFall85<-plm(fur~dum85+Group1+Group1dum85, data=G7.plm2, model="within")
+fixedFall83<-plm(fur~dum83+Group1+Group1dum83, data=G7.plm2, model="within")
+
+fixedCall85<-plm(coins~dum85+Group1+Group1dum85, data=G7.plm2, model="within")
+fixedCall83<-plm(coins~dum83+Group1+Group1dum83, data=G7.plm2, model="within")
+
+```
+
+
+The following two regression a run as a simple test regarding the choice for the cutoff year:
+
+$$
+\begin{aligned}
+IM_{i,t} =\alpha_i+&\beta_1\text{Group1}+\beta_2\text{1983,1985}+\beta_3(\text{Group1} * \text{1983,1985})+u_{i,t}
+\end{aligned}
+$$
+The sample of countries is used as in our main exercise. The results in Tables \ref{83} and \ref{85}. They show no change in the sign of the coefficients of interest, which remain negative for all goods, although in some cases the levels of significance vary
+
+
+```{r result83, results='asis'}
+stargazer(fixedPall83,fixedDall83,fixedPrall83,fixedAall83,fixedGall83,fixedFall83,fixedCall83,title = "Robustness check for break in 1983",omit.stat=c("f","rsq","adj.rsq"),keep="Group1dum",covariate.labels=" ", font.size = "footnotesize", header = FALSE, dep.var.labels =c("Pearls","Precious","Diamonds","Artwork","Jewellery","Fur","Coins"),label = "83")
+```
+
+
+```{r result85, results='asis'}
+stargazer(fixedPall85,fixedDall85,fixedPrall85,fixedAall85,fixedGall85,fixedFall85,fixedCall85,title = "Robustness check for break in 1985",omit.stat=c("f","rsq","adj.rsq"),keep="Group1dum",covariate.labels=" ", font.size = "footnotesize", header = FALSE, dep.var.labels =c("Pearls","Precious","Diamonds","Artwork","Jewellery","Fur","Coins"),label="85")
+```
+
+
+
+### Swedish Cars
+
+
+```{r}
+SWEIM = read.csv(file.path(datadir,"SWECars.csv"), header = TRUE, sep = ",")
+SWEIM <- SWEIM[c(3,6,9:10)] # Keep variables for Country, Year, Total trade and the 5 luxury SITC goods categories
+colnames(SWEIM) <- c("Country","Year","Total","Cars") # Rename variable
+
+SWE1 <- full_join(INC, SWEIM, by = c("Year","Country")) # Merge both data sets
+SWE <- full_join(SWE1, GDPdata, by = c("Year","Country")) # Merge both data sets
+SWE <- mutate(SWE,Group1=ifelse(Country=="Australia" | Country=="Canada" | Country=="Ireland" | Country=="New Zealand" |  Country=="United Kingdom" | Country=="United States" ,1,0)) # Assign a dummy variable indicating the English speaking countries
+SWE <- filter(SWE, !Country=="Spain" & !Country=="Singapore" & !Country=="Sweden") # Remove Spain
+
+## By country, linearly interpolate share of income variable
+SWE <- SWE %>%
+group_by(Country) %>%
+mutate(Top1P = na.approx(Top1P, maxgap = Inf, rule = 2))
+
+SWE <- SWE %>%
+group_by(Country) %>%
+mutate(GDP = na.approx(GDP, maxgap = Inf, rule = 2))
+
+SWE <- SWE %>%
+group_by(Country) %>%
+mutate(Total = na.approx(Total, maxgap = Inf, rule = 2))
+
+## Divide imports of each goods category by total trade
+SWE <- mutate(SWE, carsT=Cars/Total)
+
+## Divide imports by GDP of the country
+SWE <- mutate(SWE, cars=Cars/GDP*1000)
+
+
+# Group1SWE<-filter(SWE,Group1==1)
+# Group2SWE<-filter(SWE,Group1==0)
+# Group3SWE <- filter(Group2SWE, Country=="Norway" | Country=="Finland" | Country=="Singapore" | Country=="Sweden" | Country=="Italy")
+# Group2SWE <- filter(Group2SWE, !Country=="Norway" & !Country=="Finland" & !Country=="Singapore" & !Country=="Sweden" & !Country=="Italy")
+SWE <- filter(SWE, Country=="Canada" | Country=="France" | Country=="Italy" | Country=="Japan" | Country=="United Kingdom" | Country=="United States")
+
+```
+
+```{r plmSWE}
+SWE<- mutate(SWE,dum=ifelse(Year>=1980,1,0)) # Create dummy for year>1980
+SWE<-mutate(SWE, dum1P=dum*Top1P)
+SWE<-mutate(SWE, Group1P=Group1*Top1P)
+SWE<-mutate(SWE, Group1dum=dum*Group1)
+SWE<-mutate(SWE, Group1Pdum=dum1P*Group1)
+
+
+SWE.plm<-pdata.frame(SWE)
+
+
+
+fixedSWE <- plm(cars ~ dum+Group1+Group1dum, data=SWE.plm, model="within")
+fixedSWET <- plm(carsT ~ dum+Group1+Group1dum, data=SWE.plm, model="within")
+```
+
+Most passenger car brands exported from Sweden namely, Koenigsegg, Volvo, Saab, Esther and Caresto, are regarded as sports/luxury brands of cars. The same difference-in-difference regression as in the main exercise is run, but with imports of passenger motor vehicles from Sweden as the variable of interest. The same set of initial countries is used (Table \ref{tableA1}).
+
+```{r SWEcars, results='asis'}
+stargazer(fixedSWE,fixedSWET,omit.stat=c("f","rsq","adj.rsq"),keep="Group1dum",covariate.labels=" ", font.size = "footnotesize", header = FALSE,title = "Swedish cars", dep.var.labels = c("Cars/GDP","Cars/Total Imports"),label="SWE") #
+```
+
+The first columnof Table \ref{SWE} shows results as a share of each country's GDP and the second one is as share of each country's total imports. Both coefficients of interest are negative, and neither is significant.
+
+
+## Conclusions
+
+The  curious incident in our title refers to a Sherlock Holmes case where something should have happened (the dog should have barked) but did not. For countries where Atkinson, Piketty and Saez (2011, APS) found post-1980 top-end income surges using tax-filer data, we expected to find sharp increases in imports of luxury goods pearls, precious stones, diamonds, works of artwork, jewellery, furs and coins. But we found no evidence that the ratio of the value of these imported goods either to GDP or to total imports increased relative to those countries for which APS found no surge. 
+
+From the robustness exercises, there was not much change when looking at the import of the good as a share of trade, adding more countries and changing the cutoff years. The results show an interesting change when using the top share of income as a continous variable as opposed to separating countries in group 1 versus non group 1 countries. However, this result is somewhat attenuated by controlling for changes in real incomes. 
+
+This might suggest issues in import or top-income measurement in either surge or no-surge countries or it might indicate that the domestic marginal propensity to consume these luxury goods by top-income individuals in surge countries is not particularly large. Regardless this is a fragment of evidence that there may not have been a large post-1980 increase in top-end domestic consumption inequality in countries with a top-end surge in taxfiler-reported income as compared to those countries that did not have a surge.
+
+
+
+## Appendix
+
+\small
+
+-------------------------------------
+Group 1 Countries   Group 2 Countries
+------------------ ------------------
+Canada              France
+
+United Kingdom      Italy
+
+United States       Japan
+-------------------------------------
+
+Table: G7 countries minus Germany \label{tableA1}
+
+
+<!--
+
+-->
+
+-------------------------------------------------------------------------
+Group 1 Countries      Group 2 Countries                Group 3 Countries
+--------------------- -------------------------------- --------------------------
+**English speaking**   **Continental EU and Japan**     **North/South EU and other**
+
+Australia              Denmark                          Finland
+
+Canada                 France                           Italy
+
+New Zealand            Japan                            Sweden
+
+United Kingdom         Netherlands                      Norway
+
+United States          Switzerland                      -
+-------------------------------------------------------------------------
+
+Table: Larger sample of countries \label{tableA2}
+
+\normalsize
+
+```{r PearlsTrade}
+
+G7$Group1<-as.factor(as.character(G7$Group1))
+
+
+#G7 <- mutate(G7, PearlstoGDP=exp(pearls))
+
+pearlsTp<-ggplot(G7,aes(Year,pearlsT,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1))  +ylab("log Imports/Total Imports")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+preciousTp<-ggplot(G7,aes(Year,preciousT,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("non-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1)) +ylab("log Imports/Total Imports")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+diamondsTp<-ggplot(G7,aes(Year,diamondsT,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1)) +ylab("log of Imports/Total Imports ")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+artTp<-ggplot(G7,aes(Year,artT,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1))  +ylab("log of Imports/Total Imports")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+goldsilverTp<-ggplot(G7,aes(Year,goldsilverT,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1))  +ylab("log of Imports/Total Imports")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+furTp<-ggplot(G7,aes(Year,furT,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1)) +ylab("log of Imports/Total Imports")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+
+
+coinsTp<-ggplot(G7,aes(Year,coinsT,colour=Group1))+geom_smooth()+geom_line(aes(linetype=Country),size=0.8, alpha=0.4)+geom_point(aes(shape=Country), alpha=0.2, size=2)+labs(caption="Source: COMTRADE database", colour="Group Average")+ scale_colour_manual(values=c("red","blue"),labels=c("no-surge", "surge"))+theme_bw()+ theme(text=element_text(size=12,  family="Times"),axis.text.x = element_text(angle=90,face = "bold", color = "black", size = 12), axis.text = element_text(face = "bold", color = "black", size = 12), axis.title= element_text(face = "bold", color = "black", size = 12), panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),plot.title = element_text("Times", "bold", "black", size=14))+xlab(NULL) +
+  scale_x_continuous(breaks = round(seq(min(G7$Year), max(G7$Year), by = 2),1))  +ylab("log of Imports/Total Imports")+ geom_vline(xintercept = 1980,colour = 'slategrey')
+```
+
+```{r, echo=FALSE, eval= TRUE}
+# Save plot to mock folder figure
+png(filename = 'figure/pearlsT.png')
+pearlsTp
+dev.off()
+
+png(filename = 'figure/preciousT.png')
+preciousTp
+dev.off()
+
+png(filename = 'figure/diamondsT.png')
+diamondsTp
+dev.off()
+
+png(filename = 'figure/artT.png')
+artTp
+dev.off()
+
+png(filename = 'figure/goldsilverT.png')
+goldsilverTp
+dev.off()
+
+png(filename = 'figure/furT.png')
+furTp
+dev.off()
+
+png(filename = 'figure/coinsT.png')
+coinsTp
+dev.off()
+```
+
+
+\rtofigure{figure/pearlsT}{Pearls, not set or strung}{}{0.8}{pearlsT}
+
+\rtofigure{figure/preciousT}{Other precious \& semi precious stones not set}{}{0.8}{preciousT}
+
+\rtofigure{figure/diamondsT}{Diamonds, not industrial, not set or strung}{}{0.8}{diamondsT}
+
+\rtofigure{figure/artT}{Works of art, collectors pieces}{}{0.8}{artT}
+
+\rtofigure{figure/goldsilverT}{Gold, silver and platinum jewellery less watchcases}{}{0.8}{goldsilverT}
+
+\rtofigure{figure/furT}{Fur Clothing}{}{0.8}{furT}
+
+\rtofigure{figure/coinsT}{Coin, other than gold, not being legal tender}{}{0.8}{coinsT}
+
+
+
